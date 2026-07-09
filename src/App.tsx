@@ -652,17 +652,25 @@ export default function App() {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 {ALL_OUTCOMES.map((o) => {
                   const color = OUTCOME_COLORS[o];
+                  const reverseIdx = [...historyOutcomes].reverse().indexOf(o);
+                  const drySpins = reverseIdx === -1 ? null : reverseIdx;
                   return (
                     <button
                       key={o}
                       onClick={() => handleAddOutcome(o)}
-                      className={`h-16 px-4 border rounded-xl flex flex-col justify-center items-center text-center transition-all duration-200 active:scale-95 cursor-pointer bg-slate-950/60 ${color.border} hover:bg-slate-800 hover:border-slate-600 group`}
+                      className={`h-20 px-4 border rounded-xl flex flex-col justify-center items-center text-center transition-all duration-200 active:scale-95 cursor-pointer bg-slate-950/60 ${color.border} hover:bg-slate-800 hover:border-slate-600 group relative overflow-hidden`}
                     >
+                      <span className="absolute top-1.5 right-2 text-[9px] font-mono text-slate-500">
+                        {drySpins !== null ? `-${drySpins}` : '—'}
+                      </span>
                       <span className={`text-sm font-black tracking-wide ${color.text} group-hover:scale-105 transition-transform`}>
                         {o.toUpperCase()}
                       </span>
-                      <span className="text-[10px] text-slate-500 mt-1 font-mono">
+                      <span className="text-[10px] text-slate-400 mt-0.5">
                         {OUTCOME_LABELS[o]}
+                      </span>
+                      <span className="text-[9px] text-slate-500 mt-0.5 font-medium">
+                        {drySpins !== null ? (drySpins === 0 ? (language === 'vi' ? 'Vừa ra' : 'Just hit') : `${drySpins} ${language === 'vi' ? 'lượt chưa ra' : 'spins dry'}`) : (language === 'vi' ? 'Chưa ra' : 'Never hit')}
                       </span>
                     </button>
                   );
