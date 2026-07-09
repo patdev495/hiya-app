@@ -41,6 +41,8 @@ const DEFAULT_CONFIG: Config = {
   predictionMode: 'absolute',
   useRegimeAdjuster: false,
   decayFactor: 0.95,
+  useDeckAdjuster: false,
+  deckSize: 1000,
 };
 
 // Color mapping for outcomes to make the UI look rich and easy to scan
@@ -114,6 +116,12 @@ export default function App() {
         }
         if (parsed.decayFactor === undefined) {
           parsed.decayFactor = 0.95;
+        }
+        if (parsed.useDeckAdjuster === undefined) {
+          parsed.useDeckAdjuster = false;
+        }
+        if (parsed.deckSize === undefined) {
+          parsed.deckSize = 1000;
         }
         setConfig(parsed);
       }
@@ -623,6 +631,52 @@ export default function App() {
                     {t('adjusterDesc')}
                   </p>
                 </div>
+
+                {/* Exhaustion Deck Adjuster Toggle */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
+                      {t('deckAdjuster')}
+                    </label>
+                    <span className="text-[10px] text-indigo-400 font-bold bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20">
+                      {t('deckCompensator')}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => updateConfigState({ ...config, useDeckAdjuster: !config.useDeckAdjuster })}
+                    className={`w-full py-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${config.useDeckAdjuster ? 'bg-indigo-600 border-indigo-500 text-white font-black' : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-400'}`}
+                  >
+                    {config.useDeckAdjuster ? t('enabledOn') : t('disabledOff')}
+                  </button>
+                  <p className="text-[10px] text-slate-500 mt-2">
+                    {t('deckAdjusterDesc')}
+                  </p>
+                </div>
+
+                {/* Assumed Deck Size (visible only when Deck Adjuster is enabled) */}
+                {config.useDeckAdjuster && (
+                  <div>
+                    <div className="flex justify-between items-center mb-1">
+                      <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                        {t('deckSizeLabel')}
+                      </label>
+                      <span className="text-xs font-mono font-bold text-indigo-400">{config.deckSize}</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="100"
+                      max="2000"
+                      step="100"
+                      value={config.deckSize}
+                      onChange={(e) => updateConfigState({ ...config, deckSize: parseInt(e.target.value) })}
+                      className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                    />
+                    <div className="flex justify-between text-[10px] text-slate-500 mt-1">
+                      <span>100 {t('deckSpins')}</span>
+                      <span>2000 {t('deckSpins')}</span>
+                    </div>
+                  </div>
+                )}
 
                 {/* Active History Window Presets */}
                 <div>

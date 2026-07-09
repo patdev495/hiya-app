@@ -311,6 +311,31 @@ export const calculatePrediction = (
     directional = { direction, minSteps };
   }
 
+  // --- SLIDING EXHAUSTION DECK ADJUSTER ---
+  if (config.useDeckAdjuster) {
+    const deckSize = config.deckSize !== undefined ? config.deckSize : 1000;
+    const deckHistory = history.slice(-deckSize);
+    
+    const counts: Record<Outcome, number> = {} as any;
+    for (const o of ALL_OUTCOMES) {
+      counts[o] = 0;
+    }
+    for (const o of deckHistory) {
+      counts[o]++;
+    }
+
+    let sumAdj = 0;
+    for (const o of ALL_OUTCOMES) {
+      const expected = deckSize * baseProbs[o];
+      const factor = Math.exp(1 - counts[o] / Math.max(1, expected));
+      pRawOutcomes[o] = pRawOutcomes[o] * factor;
+      sumAdj += pRawOutcomes[o];
+    }
+    for (const o of ALL_OUTCOMES) {
+      pRawOutcomes[o] = pRawOutcomes[o] / (sumAdj || 1);
+    }
+  }
+
   // --- REGIME ESTIMATOR & ADJUSTER ---
   const last15 = activeHistory.slice(-15);
   const largeOutcomes = ['x10', 'x15', 'x25', 'x45'];

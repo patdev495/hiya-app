@@ -10,6 +10,8 @@ const DEFAULT_CONFIG: Config = {
   predictionMode: 'absolute',
   useRegimeAdjuster: false,
   decayFactor: 0.95,
+  useDeckAdjuster: false,
+  deckSize: 1000,
 };
 
 describe('Prediction Engine', () => {
@@ -226,5 +228,26 @@ describe('Prediction Engine', () => {
     const result = calculatePrediction(history, config);
     expect(result.probabilities.x45).toBeGreaterThan(result.probabilities.x10);
     expect(result.probabilities.x15).toBe(0);
+  });
+
+  it('should damp or boost probabilities based on deck exhaustion when enabled', () => {
+    const configWithDeck: Config = { ...DEFAULT_CONFIG, useDeckAdjuster: true, deckSize: 100 };
+
+    // 1. If 'x45' has appeared too much in the history (e.g. 10 times in 100 spins, which is much higher than expected 2.2 times),
+    // it should be damped.
+    const overHistory: Outcome[] = [
+      ...Array(90).fill('x5_1'),
+      ...Array(10).fill('x45')
+    ];
+    const resNoAdj = calculatePrediction(overHistory, DEFAULT_CONFIG);
+    const resWithAdj = calculatePrediction(overHistory, configWithDeck);
+    expect(resWithAdj.probabilities.x45).toBeLessThan(resNoAdj.probabilities.x45);
+
+    // 2. If 'x45' has never appeared in the history (0 times in 100 spins, expected is 2.2 times),
+    // it should be boosted.
+    const underHistory: Outcome[] = Array(100).fill('x5_1');
+    const resUnderNoAdj = calculatePrediction(underHistory, DEFAULT_CONFIG);
+    const resUnderWithAdj = calculatePrediction(underHistory, configWithDeck);
+    expect(resUnderWithAdj.probabilities.x45).toBeGreaterThan(resUnderNoAdj.probabilities.x45);
   });
 });

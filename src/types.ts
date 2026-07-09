@@ -10,6 +10,8 @@ export interface Config {
   predictionMode: PredictionMode;
   useRegimeAdjuster: boolean;
   decayFactor: number;
+  useDeckAdjuster: boolean;
+  deckSize: number;
 }
 
 export interface PredictionResult {
