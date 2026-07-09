@@ -46,6 +46,7 @@ const DEFAULT_CONFIG: Config = {
   deckSize: 1000,
   useAdaptiveSafety: true,
   useAutoModeSwitch: true,
+  autoModeWindow: 30,
 };
 
 // Color mapping for outcomes to make the UI look rich and easy to scan
@@ -163,6 +164,9 @@ export default function App() {
         }
         if (parsed.useAutoModeSwitch === undefined) {
           parsed.useAutoModeSwitch = true;
+        }
+        if (parsed.autoModeWindow === undefined) {
+          parsed.autoModeWindow = 30;
         }
         setConfig(parsed);
       }
@@ -688,7 +692,7 @@ export default function App() {
                     </button>
                   </div>
                   <p className="text-[10px] text-slate-500 mt-2">
-                    {config.useAutoModeSwitch && history.length >= 30 ? (
+                    {config.useAutoModeSwitch && history.length >= (config.autoModeWindow || 30) ? (
                       <span className="text-indigo-400 font-medium">
                         {t('activeModeLabel')}: {t(`mode${activeModeToShow.charAt(0).toUpperCase()}${activeModeToShow.slice(1)}` as any)} {language === 'vi' ? '(Tối ưu tự động)' : '(Auto Optimized)'}
                       </span>
@@ -872,6 +876,28 @@ export default function App() {
                   <p className="text-[10px] text-slate-500 mt-2">
                     {t('autoModeSwitchDesc')}
                   </p>
+
+                  {config.useAutoModeSwitch && (
+                    <div className="mt-4 border-t border-slate-800/40 pt-3">
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                          {t('autoModeWindowLabel')}
+                        </label>
+                        <span className="text-xs font-mono font-bold text-indigo-400">
+                          {config.autoModeWindow || 30} {t('autoSpins')}
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="15"
+                        max="100"
+                        step="5"
+                        value={config.autoModeWindow || 30}
+                        onChange={(e) => updateConfigState({ ...config, autoModeWindow: parseInt(e.target.value) })}
+                        className="w-full h-1.5 bg-slate-950 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 {/* Active History Window Presets */}

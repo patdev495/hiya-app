@@ -181,4 +181,35 @@ describe('Betting Signal Engine', () => {
 
     expect(signal.activeMode).toBe('relative');
   });
+
+  it('supports custom autoModeWindow configuration', () => {
+    const history: Outcome[] = [];
+    const pattern: Outcome[] = ['x5_1', 'x5_2', 'x5_3', 'x5_4', 'x10', 'x15', 'x25', 'x45'];
+    for (let i = 0; i < 3; i++) {
+      history.push(...pattern);
+    } // length = 24
+
+    const configDefault: Config = {
+      ...DEFAULT_CONFIG,
+      useAutoModeSwitch: true,
+      predictionMode: 'decay',
+    };
+
+    const predDefault = calculatePrediction(history, configDefault);
+    const signalDefault = calculateBettingSignal(history, predDefault, configDefault);
+    // Should NOT auto-switch since 24 < 30
+    expect(signalDefault.activeMode).toBe('decay');
+
+    const configCustom: Config = {
+      ...DEFAULT_CONFIG,
+      useAutoModeSwitch: true,
+      predictionMode: 'decay',
+      autoModeWindow: 20,
+    };
+
+    const predCustom = calculatePrediction(history, configCustom);
+    const signalCustom = calculateBettingSignal(history, predCustom, configCustom);
+    // Should auto-switch since 24 >= 20
+    expect(signalCustom.activeMode).toBe('relative');
+  });
 });

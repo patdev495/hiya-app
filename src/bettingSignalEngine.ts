@@ -202,14 +202,15 @@ export const calculateBettingSignal = (
   let activeConfig = config;
 
   // 1. Auto Mode Switching
-  if (config.useAutoModeSwitch && history.length >= 30) {
+  const autoWindow = config.autoModeWindow || 30;
+  if (config.useAutoModeSwitch && history.length >= autoWindow) {
     const modes: ('absolute' | 'relative' | 'decay')[] = ['absolute', 'relative', 'decay'];
     let bestMode = config.predictionMode;
     let bestReturn = -Infinity;
 
     for (const mode of modes) {
       const modeConfig = { ...config, predictionMode: mode, useAutoModeSwitch: false, useAdaptiveSafety: false };
-      const backtest = calculateBacktest(history.slice(-30), modeConfig);
+      const backtest = calculateBacktest(history.slice(-autoWindow), modeConfig);
       if (backtest.estimatedReturn > bestReturn) {
         bestReturn = backtest.estimatedReturn;
         bestMode = mode;

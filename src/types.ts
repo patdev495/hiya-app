@@ -14,6 +14,7 @@ export interface Config {
   deckSize: number;
   useAdaptiveSafety?: boolean;
   useAutoModeSwitch?: boolean;
+  autoModeWindow?: number;
 }
 
 export interface PredictionResult {
