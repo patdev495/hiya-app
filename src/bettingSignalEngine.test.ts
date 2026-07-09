@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { calculatePrediction } from './predictionEngine';
-import { calculateBacktest, calculateBettingSignal } from './bettingSignalEngine';
+import { calculateBacktest, calculateBettingSignal, selectActivePredictionMode } from './bettingSignalEngine';
 import type { Config, Outcome } from './types';
 
 const DEFAULT_CONFIG: Config = {
@@ -180,6 +180,40 @@ describe('Betting Signal Engine', () => {
     const signal = calculateBettingSignal(history, prediction, config);
 
     expect(signal.activeMode).toBe('relative');
+  });
+
+  it('exposes the same active mode used by auto mode switching for prediction rendering', () => {
+    const history: Outcome[] = [];
+    const pattern: Outcome[] = ['x5_1', 'x5_2', 'x5_3', 'x5_4', 'x10', 'x15', 'x25', 'x45'];
+    for (let i = 0; i < 4; i++) {
+      history.push(...pattern);
+    }
+
+    const config: Config = {
+      ...DEFAULT_CONFIG,
+      useAutoModeSwitch: true,
+      predictionMode: 'decay',
+      useRegimeAdjuster: true,
+      useDeckAdjuster: true,
+    };
+
+    const selectedMode = selectActivePredictionMode(history, config);
+    const renderedPrediction = calculatePrediction(history, {
+      ...config,
+      predictionMode: selectedMode,
+      useAutoModeSwitch: false,
+    });
+    const signal = calculateBettingSignal(history, renderedPrediction, config);
+
+    expect(selectedMode).toBe('relative');
+    expect(signal.activeMode).toBe(selectedMode);
+    expect(renderedPrediction.probabilities).toEqual(
+      calculatePrediction(history, {
+        ...config,
+        predictionMode: selectedMode,
+        useAutoModeSwitch: false,
+      }).probabilities
+    );
   });
 
   it('supports custom autoModeWindow configuration', () => {

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { calculateDeckWindowStats, calculatePrediction, ALL_OUTCOMES, MULTIPLIERS } from './predictionEngine';
-import { calculateBacktest, calculateBettingSignal } from './bettingSignalEngine';
+import { calculateBacktest, calculateBettingSignal, selectActivePredictionMode } from './bettingSignalEngine';
 import type { Outcome, Config, HistoryItem, PredictionMode } from './types';
 import { translations, type Language } from './locales';
 import { 
@@ -249,14 +249,18 @@ export default function App() {
     decay: calculateBacktest(autoHistory, { ...config, predictionMode: 'decay', useAutoModeSwitch: false, useAdaptiveSafety: false }).estimatedReturn,
   };
 
-  // If previewMode is active, override config for prediction and betting signal calculations
-  const activeConfigForPrediction = previewMode
-    ? { ...config, predictionMode: previewMode, useAutoModeSwitch: false }
-    : config;
+  // If previewMode is active, override config for prediction and betting signal calculations.
+  // Otherwise, render probabilities with the same auto-selected mode used by the signal.
+  const selectedPredictionMode = previewMode || selectActivePredictionMode(historyOutcomes, config);
+  const activeConfigForPrediction = {
+    ...config,
+    predictionMode: selectedPredictionMode,
+    useAutoModeSwitch: previewMode ? false : config.useAutoModeSwitch,
+  };
 
   const prediction = calculatePrediction(historyOutcomes, activeConfigForPrediction);
   const bettingSignal = calculateBettingSignal(historyOutcomes, prediction, activeConfigForPrediction);
-  const activeModeToShow = previewMode || bettingSignal.activeMode || config.predictionMode;
+  const activeModeToShow = previewMode || bettingSignal.activeMode || selectedPredictionMode;
   const backtestSummary = calculateBacktest(historyOutcomes, config);
   const deckWindowStats = calculateDeckWindowStats(historyOutcomes, config.deckSize);
 
@@ -345,7 +349,7 @@ export default function App() {
                     </span>
                     <span className="text-xs text-slate-500">{t('eventDriven')}</span>
                   </div>
-                  {config.predictionMode === 'relative' && prediction.directional ? (
+                  {activeConfigForPrediction.predictionMode === 'relative' && prediction.directional ? (
                     <>
                       <h2 className="text-4xl font-black text-white mt-4 tracking-tight">
                         {prediction.directional.direction === 'forward' && (
@@ -440,7 +444,7 @@ export default function App() {
                           const color = OUTCOME_COLORS[c];
                           const nextItem = prediction.evidence.activeContext[i + 1];
                           let shiftLabel = '';
-                          if (nextItem && config.predictionMode === 'relative') {
+                          if (nextItem && activeConfigForPrediction.predictionMode === 'relative') {
                             const idx1 = ALL_OUTCOMES.indexOf(c);
                             const idx2 = ALL_OUTCOMES.indexOf(nextItem);
                             const shift = (idx2 - idx1 + 8) % 8;

@@ -1,5 +1,5 @@
 import { ALL_OUTCOMES, calculatePrediction, MULTIPLIERS } from './predictionEngine';
-import type { BacktestSummary, BettingAction, BettingCandidate, BettingSignal, Config, Outcome, PredictionResult, StakeLevel, TargetTier } from './types';
+import type { BacktestSummary, BettingAction, BettingCandidate, BettingSignal, Config, Outcome, PredictionMode, PredictionResult, StakeLevel, TargetTier } from './types';
 
 const DEFAULT_SAFETY_MARGIN = 0.5;
 
@@ -155,6 +155,36 @@ const calculateBettingSignalInternal = (
   };
 };
 
+export const selectActivePredictionMode = (
+  history: Outcome[],
+  config: Config
+): PredictionMode => {
+  const autoWindow = config.autoModeWindow || 30;
+  if (!config.useAutoModeSwitch || history.length < autoWindow) {
+    return config.predictionMode;
+  }
+
+  const modes: PredictionMode[] = ['absolute', 'relative', 'decay'];
+  let bestMode = config.predictionMode;
+  let bestReturn = -Infinity;
+
+  for (const mode of modes) {
+    const modeConfig = {
+      ...config,
+      predictionMode: mode,
+      useAutoModeSwitch: false,
+      useAdaptiveSafety: false,
+    };
+    const backtest = calculateBacktest(history.slice(-autoWindow), modeConfig);
+    if (backtest.estimatedReturn > bestReturn) {
+      bestReturn = backtest.estimatedReturn;
+      bestMode = mode;
+    }
+  }
+
+  return bestMode;
+};
+
 const evaluateRecentPerformance = (
   history: Outcome[],
   config: Config
@@ -202,26 +232,10 @@ export const calculateBettingSignal = (
   let activeConfig = config;
 
   // 1. Auto Mode Switching
-  const autoWindow = config.autoModeWindow || 30;
-  if (config.useAutoModeSwitch && history.length >= autoWindow) {
-    const modes: ('absolute' | 'relative' | 'decay')[] = ['absolute', 'relative', 'decay'];
-    let bestMode = config.predictionMode;
-    let bestReturn = -Infinity;
-
-    for (const mode of modes) {
-      const modeConfig = { ...config, predictionMode: mode, useAutoModeSwitch: false, useAdaptiveSafety: false };
-      const backtest = calculateBacktest(history.slice(-autoWindow), modeConfig);
-      if (backtest.estimatedReturn > bestReturn) {
-        bestReturn = backtest.estimatedReturn;
-        bestMode = mode;
-      }
-    }
-
-    activeMode = bestMode;
-    if (activeMode !== config.predictionMode) {
-      activeConfig = { ...config, predictionMode: activeMode };
-      activePrediction = calculatePrediction(history, activeConfig);
-    }
+  activeMode = selectActivePredictionMode(history, config);
+  if (activeMode !== config.predictionMode) {
+    activeConfig = { ...config, predictionMode: activeMode };
+    activePrediction = calculatePrediction(history, activeConfig);
   }
 
   // 2. Drift Detection
