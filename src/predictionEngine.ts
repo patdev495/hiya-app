@@ -106,6 +106,13 @@ export const calculatePrediction = (
 
   const baseProbs = getBaseProbabilities();
 
+  let pRawOutcomes: Record<Outcome, number> = {} as any;
+  let confidence: 'high' | 'medium' | 'low' = 'low';
+  let finalContext: Outcome[] = [];
+  let finalContextCount = 0;
+  let matchedOrder = 0;
+  let directional: { direction: 'forward' | 'backward' | 'stay' | 'half'; minSteps: number } | undefined;
+
   if (mode === 'absolute') {
     // --- ABSOLUTE MODE ---
     const overallCounts: Record<Outcome, number> = {} as any;
@@ -123,9 +130,7 @@ export const calculatePrediction = (
 
     const K = Math.min(m, config.maxOrder);
     let pPrev = { ...p0 };
-    let finalContext: Outcome[] = [];
-    let finalContextCount = 0;
-    let matchedOrder = 0;
+    finalContextCount = m;
 
     for (let k = 1; k <= K; k++) {
       const context = activeHistory.slice(-k);
@@ -143,7 +148,8 @@ export const calculatePrediction = (
       matchedOrder = k;
     }
 
-    let confidence: 'high' | 'medium' | 'low' = 'low';
+    pRawOutcomes = pPrev;
+
     if (m >= 1) {
       const context1 = activeHistory.slice(-1);
       const { total: count1 } = countContext(activeHistory, context1);
@@ -160,53 +166,8 @@ export const calculatePrediction = (
         confidence = 'medium';
       }
     }
-
-    // Convert to 100.00% percentages
-    let sumRounded = 0;
-    const probabilities: Record<Outcome, number> = {} as any;
-    for (const o of ALL_OUTCOMES) {
-      const percentage = pPrev[o] * 100;
-      const rounded = Math.round(percentage * 100) / 100;
-      probabilities[o] = rounded;
-      sumRounded += rounded;
-    }
-
-    const diff = Math.round((100 - sumRounded) * 100) / 100;
-    if (diff !== 0) {
-      let maxOutcome = ALL_OUTCOMES[0];
-      let maxVal = probabilities[maxOutcome];
-      for (const o of ALL_OUTCOMES) {
-        if (probabilities[o] > maxVal) {
-          maxVal = probabilities[o];
-          maxOutcome = o;
-        }
-      }
-      probabilities[maxOutcome] = Math.round((probabilities[maxOutcome] + diff) * 100) / 100;
-    }
-
-    let topOutcome = ALL_OUTCOMES[0];
-    let maxProb = probabilities[topOutcome];
-    for (const o of ALL_OUTCOMES) {
-      if (probabilities[o] > maxProb) {
-        maxProb = probabilities[o];
-        topOutcome = o;
-      }
-    }
-
-    return {
-      activeHistory,
-      probabilities,
-      topOutcome,
-      confidence,
-      evidence: {
-        activeContext: finalContext,
-        contextCount: finalContextCount,
-        matchedOrder
-      }
-    };
   } else {
     // --- RELATIVE MODE ---
-    // 1. Convert history to shifts: (index[i+1] - index[i]) mod 8
     const offsets: number[] = [];
     for (let i = 0; i < m - 1; i++) {
       const idx1 = ALL_OUTCOMES.indexOf(activeHistory[i]);
@@ -216,21 +177,18 @@ export const calculatePrediction = (
     }
     const L = offsets.length;
 
-    // 2. Count frequencies of shifts
     const shiftCounts: Record<number, number> = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0 };
     for (const d of offsets) {
       shiftCounts[d]++;
     }
 
-    // 3. 0-order estimation on shifts (uniform prior of 1/8)
     let pPrevShift: Record<number, number> = {};
     for (let d = 0; d < 8; d++) {
       pPrevShift[d] = (shiftCounts[d] + config.priorStrength * 0.125) / (L + config.priorStrength);
     }
 
     const K = Math.min(L, config.maxOrder);
-    let finalOffsetContextCount = L;
-    let matchedOrder = 0;
+    finalContextCount = L;
 
     for (let k = 1; k <= K; k++) {
       const context = offsets.slice(-k);
@@ -243,21 +201,17 @@ export const calculatePrediction = (
       }
 
       pPrevShift = pkShift;
-      finalOffsetContextCount = contextCount;
+      finalContextCount = contextCount;
       matchedOrder = k;
     }
 
-    // 4. Map predicted shifts back to absolute outcomes
     const idxLast = ALL_OUTCOMES.indexOf(activeHistory[m - 1]);
-    const pOutcome: Record<Outcome, number> = {} as any;
     for (const o of ALL_OUTCOMES) {
       const idxO = ALL_OUTCOMES.indexOf(o);
       const shift = (idxO - idxLast + 8) % 8;
-      pOutcome[o] = pPrevShift[shift];
+      pRawOutcomes[o] = pPrevShift[shift];
     }
 
-    // 5. Determine confidence level based on shifts context support
-    let confidence: 'high' | 'medium' | 'low' = 'low';
     if (L >= 1) {
       const context1 = offsets.slice(-1);
       const { total: count1 } = countOffsetContext(offsets, context1);
@@ -275,40 +229,7 @@ export const calculatePrediction = (
       }
     }
 
-    // 6. Convert to 100.00% percentages
-    let sumRounded = 0;
-    const probabilities: Record<Outcome, number> = {} as any;
-    for (const o of ALL_OUTCOMES) {
-      const percentage = pOutcome[o] * 100;
-      const rounded = Math.round(percentage * 100) / 100;
-      probabilities[o] = rounded;
-      sumRounded += rounded;
-    }
-
-    const diff = Math.round((100 - sumRounded) * 100) / 100;
-    if (diff !== 0) {
-      let maxOutcome = ALL_OUTCOMES[0];
-      let maxVal = probabilities[maxOutcome];
-      for (const o of ALL_OUTCOMES) {
-        if (probabilities[o] > maxVal) {
-          maxVal = probabilities[o];
-          maxOutcome = o;
-        }
-      }
-      probabilities[maxOutcome] = Math.round((probabilities[maxOutcome] + diff) * 100) / 100;
-    }
-
-    let topOutcome = ALL_OUTCOMES[0];
-    let maxProb = probabilities[topOutcome];
-    for (const o of ALL_OUTCOMES) {
-      if (probabilities[o] > maxProb) {
-        maxProb = probabilities[o];
-        topOutcome = o;
-      }
-    }
-
-    // Context mapped back to outcomes for type safety and UI consistency
-    const finalContext = activeHistory.slice(-matchedOrder);
+    finalContext = activeHistory.slice(-matchedOrder);
 
     // Calculate directional trends
     const pFwd = (pPrevShift[1] || 0) + (pPrevShift[2] || 0) + (pPrevShift[3] || 0);
@@ -346,8 +267,8 @@ export const calculatePrediction = (
         minSteps = 1;
       }
     } else if (direction === 'backward') {
-      const p3Cond = (pPrevShift[5] || 0) / (pBwd || 1); // shift 5 is Bwd 3
-      const p2PlusCond = ((pPrevShift[5] || 0) + (pPrevShift[6] || 0)) / (pBwd || 1); // shift 5 and 6 are Bwd 3 and Bwd 2
+      const p3Cond = (pPrevShift[5] || 0) / (pBwd || 1);
+      const p2PlusCond = ((pPrevShift[5] || 0) + (pPrevShift[6] || 0)) / (pBwd || 1);
       if (p3Cond >= 0.35) {
         minSteps = 3;
       } else if (p2PlusCond >= 0.65) {
@@ -357,20 +278,77 @@ export const calculatePrediction = (
       }
     }
 
-    return {
-      activeHistory,
-      probabilities,
-      topOutcome,
-      confidence,
-      evidence: {
-        activeContext: finalContext,
-        contextCount: finalOffsetContextCount,
-        matchedOrder
-      },
-      directional: {
-        direction,
-        minSteps
-      }
-    };
+    directional = { direction, minSteps };
   }
+
+  // --- REGIME ESTIMATOR & ADJUSTER ---
+  const last15 = activeHistory.slice(-15);
+  const largeOutcomes = ['x10', 'x15', 'x25', 'x45'];
+  const largeCount = last15.filter(o => largeOutcomes.includes(o)).length;
+  const regime = largeCount <= 1 ? 'cold' : 'hot';
+
+  let pAdjusted = { ...pRawOutcomes };
+  if (config.useRegimeAdjuster) {
+    let sum = 0;
+    for (const o of ALL_OUTCOMES) {
+      if (largeOutcomes.includes(o)) {
+        pAdjusted[o] = pRawOutcomes[o] * (regime === 'cold' ? 0.5 : 1.5);
+      } else {
+        pAdjusted[o] = pRawOutcomes[o];
+      }
+      sum += pAdjusted[o];
+    }
+    // Re-normalize
+    for (const o of ALL_OUTCOMES) {
+      pAdjusted[o] = pAdjusted[o] / (sum || 1);
+    }
+  }
+
+  // --- PERCENTAGE ROUNDING & NORMALIZATION ---
+  let sumRounded = 0;
+  const probabilities: Record<Outcome, number> = {} as any;
+  for (const o of ALL_OUTCOMES) {
+    const percentage = pAdjusted[o] * 100;
+    const rounded = Math.round(percentage * 100) / 100;
+    probabilities[o] = rounded;
+    sumRounded += rounded;
+  }
+
+  const diff = Math.round((100 - sumRounded) * 100) / 100;
+  if (diff !== 0) {
+    let maxOutcome = ALL_OUTCOMES[0];
+    let maxVal = probabilities[maxOutcome];
+    for (const o of ALL_OUTCOMES) {
+      if (probabilities[o] > maxVal) {
+        maxVal = probabilities[o];
+        maxOutcome = o;
+      }
+    }
+    probabilities[maxOutcome] = Math.round((probabilities[maxOutcome] + diff) * 100) / 100;
+  }
+
+  // --- TOP OUTCOME SELECTION ---
+  let topOutcome = ALL_OUTCOMES[0];
+  let maxProb = probabilities[topOutcome];
+  for (const o of ALL_OUTCOMES) {
+    if (probabilities[o] > maxProb) {
+      maxProb = probabilities[o];
+      topOutcome = o;
+    }
+  }
+
+  return {
+    activeHistory,
+    probabilities,
+    topOutcome,
+    confidence,
+    evidence: {
+      activeContext: finalContext,
+      contextCount: finalContextCount,
+      matchedOrder
+    },
+    directional,
+    regime,
+    largeCount
+  };
 };

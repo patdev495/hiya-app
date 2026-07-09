@@ -8,6 +8,7 @@ export interface Config {
   priorStrength: number;
   minSupport: number;
   predictionMode: PredictionMode;
+  useRegimeAdjuster: boolean;
 }
 
 export interface PredictionResult {
@@ -24,6 +25,8 @@ export interface PredictionResult {
     direction: 'forward' | 'backward' | 'stay' | 'half';
     minSteps: number;
   };
+  regime?: 'hot' | 'cold';
+  largeCount?: number;
 }
 
 export interface HistoryItem {

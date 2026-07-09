@@ -37,6 +37,7 @@ const DEFAULT_CONFIG: Config = {
   priorStrength: 20,
   minSupport: 5,
   predictionMode: 'absolute',
+  useRegimeAdjuster: false,
 };
 
 // Color mapping for outcomes to make the UI look rich and easy to scan
@@ -87,6 +88,9 @@ export default function App() {
         const parsed = JSON.parse(storedConfig);
         if (!parsed.predictionMode) {
           parsed.predictionMode = 'absolute';
+        }
+        if (parsed.useRegimeAdjuster === undefined) {
+          parsed.useRegimeAdjuster = false;
         }
         setConfig(parsed);
       }
@@ -214,7 +218,7 @@ export default function App() {
           <div className="lg:col-span-2 space-y-8">
             
             {/* Top Highlight Panel (Top Outcome / Confidence) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               
               {/* Top Outcome Highlight */}
               <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800/80 rounded-2xl p-6 relative overflow-hidden flex flex-col justify-between">
@@ -361,6 +365,56 @@ export default function App() {
                   )}
                 </div>
               </div>
+
+              {/* Payout Regime Status Card */}
+              <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800/80 rounded-2xl p-6 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <Flame className="w-3.5 h-3.5" />
+                      Payout Regime
+                    </span>
+                    <span className="text-xs text-slate-500">Last 15 spins</span>
+                  </div>
+
+                  <div className="mt-4 flex flex-col gap-2">
+                    {prediction.regime === 'hot' ? (
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center px-3.5 py-1.5 rounded-full text-sm font-bold bg-rose-500/10 text-rose-400 border border-rose-500/30">
+                          <Flame className="w-4 h-4 mr-1.5 animate-pulse text-rose-400" />
+                          HOT (Payout / Nhả)
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex items-center px-3.5 py-1.5 rounded-full text-sm font-bold bg-blue-500/10 text-blue-400 border border-blue-500/30">
+                          <span className="w-2.5 h-2.5 mr-1.5 rounded-full bg-blue-500 animate-pulse" />
+                          COLD (Accumulating / Hút)
+                        </span>
+                      </div>
+                    )}
+                    
+                    <div className="text-xs text-slate-400 mt-2">
+                      Large spins (≥ x10): <strong className="text-slate-200">{prediction.largeCount}/15</strong>
+                    </div>
+
+                    <div className="text-[10px] text-slate-500 mt-1">
+                      {prediction.regime === 'hot' 
+                        ? 'High multipliers clustered. Payout multiplier is boosted (1.5x).' 
+                        : 'Accumulating reward pool. High multipliers are damped (0.5x).'}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 border-t border-slate-800/50 pt-3 flex items-center justify-between text-xs text-slate-500">
+                  <span>Adjuster Status:</span>
+                  {config.useRegimeAdjuster ? (
+                    <span className="text-emerald-400 font-bold">Active (ON)</span>
+                  ) : (
+                    <span className="text-slate-500 font-medium">Inactive (OFF)</span>
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* Probability Distribution Cards */}
@@ -475,6 +529,27 @@ export default function App() {
                     {config.predictionMode === 'absolute' 
                       ? 'Analyzes transition patterns of specific slot occurrences.' 
                       : 'Analyzes step displacements (forward/backward/stay) on the circular wheel.'}
+                  </p>
+                </div>
+
+                {/* Hot/Cold Cycle Adjuster Toggle */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
+                      Hot/Cold Adjuster
+                    </label>
+                    <span className="text-[10px] text-indigo-400 font-bold bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20">
+                      RTP Compensator
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => updateConfigState({ ...config, useRegimeAdjuster: !config.useRegimeAdjuster })}
+                    className={`w-full py-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${config.useRegimeAdjuster ? 'bg-indigo-600 border-indigo-500 text-white font-black' : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-400'}`}
+                  >
+                    {config.useRegimeAdjuster ? 'Enabled (ON)' : 'Disabled (OFF)'}
+                  </button>
+                  <p className="text-[10px] text-slate-500 mt-2">
+                    Adjusts/dampens outcomes based on whether machine is in a payout cluster.
                   </p>
                 </div>
 

@@ -8,6 +8,7 @@ const DEFAULT_CONFIG: Config = {
   priorStrength: 20,
   minSupport: 5,
   predictionMode: 'absolute',
+  useRegimeAdjuster: false,
 };
 
 describe('Prediction Engine', () => {
@@ -183,5 +184,38 @@ describe('Prediction Engine', () => {
     expect(result.directional).toBeDefined();
     expect(result.directional?.direction).toBe('forward');
     expect(result.directional?.minSteps).toBe(3);
+  });
+
+  it('should detect cold and hot regimes based on last 15 spins', () => {
+    // 1. Cold regime: last 15 spins have <= 1 large outcome
+    const coldHistory: Outcome[] = Array(15).fill('x5_1');
+    const resultCold = calculatePrediction(coldHistory, DEFAULT_CONFIG);
+    expect(resultCold.regime).toBe('cold');
+    expect(resultCold.largeCount).toBe(0);
+
+    // 2. Hot regime: last 15 spins have >= 2 large outcomes (e.g. x10, x25)
+    const hotHistory: Outcome[] = [
+      ...Array(13).fill('x5_1'),
+      'x10', 'x25'
+    ];
+    const resultHot = calculatePrediction(hotHistory, DEFAULT_CONFIG);
+    expect(resultHot.regime).toBe('hot');
+    expect(resultHot.largeCount).toBe(2);
+  });
+
+  it('should damp or boost large outcomes when useRegimeAdjuster is enabled', () => {
+    const configWithAdjuster: Config = { ...DEFAULT_CONFIG, useRegimeAdjuster: true };
+
+    // 1. In COLD regime (no large spins in history), large outcomes should be damped.
+    const history: Outcome[] = Array(15).fill('x5_1');
+    const resNoAdj = calculatePrediction(history, DEFAULT_CONFIG);
+    const resWithAdj = calculatePrediction(history, configWithAdjuster);
+    expect(resWithAdj.probabilities.x45).toBeLessThan(resNoAdj.probabilities.x45);
+
+    // 2. In HOT regime (many large spins in history), large outcomes should be boosted.
+    const hotHistory: Outcome[] = Array(15).fill('x45');
+    const resHotNoAdj = calculatePrediction(hotHistory, DEFAULT_CONFIG);
+    const resHotWithAdj = calculatePrediction(hotHistory, configWithAdjuster);
+    expect(resHotWithAdj.probabilities.x45).toBeGreaterThan(resHotNoAdj.probabilities.x45);
   });
 });
