@@ -73,6 +73,9 @@ export interface DeckOutcomeStats {
   count: number;
   expected: number;
   deviation: number;
+  ratioPercent: number;
+  countPercent: number;
+  expectedPercent: number;
 }
 
 export interface DeckWindowStats {

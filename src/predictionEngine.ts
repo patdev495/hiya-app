@@ -48,11 +48,21 @@ export const calculateDeckWindowStats = (
   for (const outcome of ALL_OUTCOMES) {
     const count = deckHistory.filter((item) => item === outcome).length;
     const expected = Math.round(deckHistory.length * baseProbs[outcome] * 100) / 100;
+    const ratioPercent = expected > 0
+      ? Math.round((count / expected) * 100)
+      : 0;
+    const countPercent = deckHistory.length > 0
+      ? Math.round((count / deckHistory.length) * 10000) / 100
+      : 0;
+    const expectedPercent = Math.round(baseProbs[outcome] * 10000) / 100;
     outcomes[outcome] = {
       outcome,
       count,
       expected,
       deviation: Math.round((count - expected) * 100) / 100,
+      ratioPercent,
+      countPercent,
+      expectedPercent,
     };
   }
 

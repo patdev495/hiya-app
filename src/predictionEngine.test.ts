@@ -267,5 +267,11 @@ describe('Prediction Engine', () => {
     expect(stats.outcomes.x5_1.count).toBe(0);
     expect(stats.outcomes.x45.expected).toBeCloseTo(0.22, 2);
     expect(stats.outcomes.x45.deviation).toBeCloseTo(4.78, 2);
+    expect(stats.outcomes.x45.ratioPercent).toBe(2273);
+    expect(stats.outcomes.x10.ratioPercent).toBe(515);
+    expect(stats.outcomes.x45.countPercent).toBeCloseTo(50.00, 2);
+    expect(stats.outcomes.x45.expectedPercent).toBeCloseTo(2.16, 2);
+    expect(stats.outcomes.x10.countPercent).toBeCloseTo(50.00, 2);
+    expect(stats.outcomes.x10.expectedPercent).toBeCloseTo(9.72, 2);
   });
 });

@@ -742,9 +742,9 @@ export default function App() {
                         {ALL_OUTCOMES.map((outcome) => {
                           const stats = deckWindowStats.outcomes[outcome];
                           const color = OUTCOME_COLORS[outcome];
-                          const deviationTone = stats.deviation > 0
+                          const ratioTone = stats.ratioPercent > 100
                             ? 'text-rose-400'
-                            : stats.deviation < 0
+                            : stats.ratioPercent < 100
                               ? 'text-emerald-400'
                               : 'text-slate-400';
 
@@ -754,11 +754,11 @@ export default function App() {
                                 {outcome.toUpperCase()}
                               </span>
                               <span className="text-slate-300 font-semibold">
-                                {stats.count}
-                                <span className="text-slate-600 font-normal"> / {stats.expected}</span>
+                                {stats.countPercent}%
+                                <span className="text-slate-600 font-normal"> / {stats.expectedPercent}%</span>
                               </span>
-                              <span className={`font-mono font-bold ${deviationTone}`}>
-                                {stats.deviation > 0 ? '+' : ''}{stats.deviation}
+                              <span className={`font-mono font-bold ${ratioTone}`}>
+                                {stats.ratioPercent}%
                               </span>
                             </div>
                           );
