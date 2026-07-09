@@ -20,6 +20,12 @@ The weight given to base probability when estimating the next outcome from histo
 
 The configured prior strength is `20`, meaning base probability contributes the equivalent of 20 virtual spins before real historical counts are added.
 
+### Outcome Regime
+
+A recent-history phase where outcome frequency appears materially different from the base probability mix.
+
+A cold regime is dominated by `x5` outcomes, while a hot regime has more frequent large outcomes (`x10`, `x15`, `x25`, or `x45`) interleaved with `x5` outcomes. Regime labels describe observed recent-history behavior, not a guarantee that the next spin is controlled by that phase.
+
 ### Approximate Spin Cadence
 
 A new spin result becomes available roughly every 40 seconds.

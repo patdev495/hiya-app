@@ -37,3 +37,33 @@ export interface HistoryItem {
   outcome: Outcome;
   timestamp: number;
 }
+
+export type BettingAction = 'skip' | 'probe' | 'normal' | 'tiny-shot';
+export type StakeLevel = 'skip' | 'probe' | 'normal' | 'tiny-shot';
+export type RiskLevel = 'low' | 'medium' | 'high';
+export type TargetTier = 'x5' | 'x10-x15' | 'x25' | 'x45';
+
+export interface BettingCandidate {
+  outcome: Outcome;
+  probability: number;
+  breakEven: number;
+  edge: number;
+}
+
+export interface BettingSignal {
+  action: BettingAction;
+  target: Outcome | TargetTier | null;
+  stakeLevel: StakeLevel;
+  risk: RiskLevel;
+  candidates: BettingCandidate[];
+  agreementScore: number;
+  reasons: string[];
+}
+
+export interface BacktestSummary {
+  totalEvaluated: number;
+  skipped: number;
+  actionCounts: Record<StakeLevel, number>;
+  hitsByTarget: Partial<Record<Outcome | TargetTier, { hits: number; attempts: number; hitRate: number }>>;
+  estimatedReturn: number;
+}

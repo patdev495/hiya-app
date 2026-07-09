@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { calculatePrediction, ALL_OUTCOMES, MULTIPLIERS } from './predictionEngine';
+import { calculateBacktest, calculateBettingSignal } from './bettingSignalEngine';
 import type { Outcome, Config, HistoryItem } from './types';
 import { translations, type Language } from './locales';
 import { 
@@ -66,6 +67,17 @@ const OUTCOME_LABELS: Record<Outcome, string> = {
   x15: 'x15 Slot',
   x25: 'x25 Slot',
   x45: 'x45 Slot',
+};
+
+const getSignalTone = (action: string): string => {
+  if (action === 'skip') return 'bg-slate-800 text-slate-300 border-slate-700';
+  if (action === 'normal') return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30';
+  if (action === 'probe') return 'bg-amber-500/10 text-amber-400 border-amber-500/30';
+  return 'bg-rose-500/10 text-rose-400 border-rose-500/30';
+};
+
+const formatSignalTarget = (target: string | null): string => {
+  return target ? target.replace('_', ' ').toUpperCase() : 'SKIP';
 };
 
 const DEMO_HISTORY: Outcome[] = [
@@ -193,6 +205,8 @@ export default function App() {
   // Prediction calculation using only the history outcomes
   const historyOutcomes = history.map(h => h.outcome);
   const prediction = calculatePrediction(historyOutcomes, config);
+  const bettingSignal = calculateBettingSignal(historyOutcomes, prediction, config);
+  const backtestSummary = calculateBacktest(historyOutcomes, config);
 
   // Split history into active (within window) and older
   const activeCount = prediction.activeHistory.length;
@@ -265,7 +279,7 @@ export default function App() {
           <div className="lg:col-span-2 space-y-8">
             
             {/* Top Highlight Panel (Top Outcome / Confidence) */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
               
               {/* Top Outcome Highlight */}
               <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800/80 rounded-2xl p-6 relative overflow-hidden flex flex-col justify-between">
@@ -461,6 +475,48 @@ export default function App() {
                   ) : (
                     <span className="text-slate-500 font-medium">{t('inactiveOff')}</span>
                   )}
+                </div>
+              </div>
+
+              {/* Betting Signal Card */}
+              <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800/80 rounded-2xl p-6 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <Gauge className="w-3.5 h-3.5" />
+                      {t('bettingSignal')}
+                    </span>
+                    <span className="text-xs text-slate-500">{t('edgeGate')}</span>
+                  </div>
+
+                  <div className="mt-4 flex items-center gap-2">
+                    <span className={`inline-flex items-center px-3.5 py-1.5 rounded-full text-sm font-bold border ${getSignalTone(bettingSignal.action)}`}>
+                      {t(`signalAction_${bettingSignal.action}` as Exclude<keyof typeof translations['en'], 'displacementLabels'>)}
+                    </span>
+                  </div>
+
+                  <h2 className="text-3xl font-black text-white mt-4 tracking-tight">
+                    {formatSignalTarget(bettingSignal.target)}
+                  </h2>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                    <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-2">
+                      <div className="text-slate-500">{t('stakeLevel')}</div>
+                      <div className="font-bold text-slate-200 uppercase">{bettingSignal.stakeLevel}</div>
+                    </div>
+                    <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-2">
+                      <div className="text-slate-500">{t('riskLevel')}</div>
+                      <div className="font-bold text-slate-200 uppercase">{bettingSignal.risk}</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 border-t border-slate-800/50 pt-3 space-y-1">
+                  {bettingSignal.reasons.slice(0, 3).map((reason) => (
+                    <div key={reason} className="text-[10px] text-slate-400 flex gap-1.5">
+                      <span className="text-indigo-400">•</span>
+                      <span>{reason}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
@@ -767,6 +823,48 @@ export default function App() {
                     <span>10 ({t('highSupport')})</span>
                   </div>
                 </div>
+              </div>
+            </div>
+
+            {/* Backtest Summary Panel */}
+            <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800/80 rounded-2xl p-6">
+              <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-indigo-400" />
+                {t('backtestSummary')}
+              </h3>
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-3">
+                  <div className="text-slate-500">{t('evaluatedSpins')}</div>
+                  <div className="text-xl font-black text-white">{backtestSummary.totalEvaluated}</div>
+                </div>
+                <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-3">
+                  <div className="text-slate-500">{t('skippedSpins')}</div>
+                  <div className="text-xl font-black text-white">{backtestSummary.skipped}</div>
+                </div>
+                <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-3">
+                  <div className="text-slate-500">{t('normalSignals')}</div>
+                  <div className="text-xl font-black text-emerald-400">{backtestSummary.actionCounts.normal}</div>
+                </div>
+                <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-3">
+                  <div className="text-slate-500">{t('estimatedReturn')}</div>
+                  <div className={`text-xl font-black ${backtestSummary.estimatedReturn >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {backtestSummary.estimatedReturn}
+                  </div>
+                </div>
+              </div>
+              <div className="mt-4 space-y-2">
+                {Object.entries(backtestSummary.hitsByTarget).length === 0 ? (
+                  <div className="text-xs text-slate-500">{t('noBacktestSignals')}</div>
+                ) : (
+                  Object.entries(backtestSummary.hitsByTarget).map(([target, stats]) => (
+                    <div key={target} className="flex items-center justify-between text-xs border-b border-slate-800/60 pb-2 last:border-b-0">
+                      <span className="font-mono font-bold text-slate-300">{formatSignalTarget(target)}</span>
+                      <span className="text-slate-500">
+                        {stats.hits}/{stats.attempts} · {stats.hitRate}%
+                      </span>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
 
