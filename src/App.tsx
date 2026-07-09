@@ -39,10 +39,10 @@ const DEFAULT_CONFIG: Config = {
   maxOrder: 2,
   priorStrength: 20,
   minSupport: 5,
-  predictionMode: 'absolute',
-  useRegimeAdjuster: false,
+  predictionMode: 'relative',
+  useRegimeAdjuster: true,
   decayFactor: 0.95,
-  useDeckAdjuster: false,
+  useDeckAdjuster: true,
   deckSize: 1000,
 };
 
