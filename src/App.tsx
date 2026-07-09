@@ -774,9 +774,14 @@ export default function App() {
                               <span className={`font-mono font-bold ${color.text}`}>
                                 {outcome.toUpperCase()}
                               </span>
-                              <span className="text-slate-300 font-semibold">
-                                {stats.countPercent}%
-                                <span className="text-slate-600 font-normal"> / {stats.expectedPercent}%</span>
+                              <span className="text-slate-300 font-semibold text-right flex flex-col items-end">
+                                <span>
+                                  {stats.count}
+                                  <span className="text-slate-600 font-normal"> / {stats.expected}</span>
+                                </span>
+                                <span className="text-[10px] text-slate-500 font-normal">
+                                  {stats.countPercent}% / {stats.expectedPercent}%
+                                </span>
                               </span>
                               <span className={`font-mono font-bold ${ratioTone}`}>
                                 {stats.ratioPercent}%
