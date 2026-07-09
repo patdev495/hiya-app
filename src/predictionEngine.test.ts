@@ -9,6 +9,7 @@ const DEFAULT_CONFIG: Config = {
   minSupport: 5,
   predictionMode: 'absolute',
   useRegimeAdjuster: false,
+  decayFactor: 0.95,
 };
 
 describe('Prediction Engine', () => {
@@ -217,5 +218,13 @@ describe('Prediction Engine', () => {
     const resHotNoAdj = calculatePrediction(hotHistory, DEFAULT_CONFIG);
     const resHotWithAdj = calculatePrediction(hotHistory, configWithAdjuster);
     expect(resHotWithAdj.probabilities.x45).toBeGreaterThan(resHotNoAdj.probabilities.x45);
+  });
+
+  it('should compute exponential decay probabilities correctly in decay mode', () => {
+    const config: Config = { ...DEFAULT_CONFIG, predictionMode: 'decay', decayFactor: 0.90, priorStrength: 0 };
+    const history: Outcome[] = ['x10', 'x45'];
+    const result = calculatePrediction(history, config);
+    expect(result.probabilities.x45).toBeGreaterThan(result.probabilities.x10);
+    expect(result.probabilities.x15).toBe(0);
   });
 });

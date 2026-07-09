@@ -102,7 +102,9 @@ export const calculatePrediction = (
   const m = activeHistory.length;
 
   // If in relative mode, but we don't have enough history to compute transitions, fallback to absolute
-  const mode = (config.predictionMode === 'relative' && m >= 2) ? 'relative' : 'absolute';
+  const mode = config.predictionMode === 'decay' 
+    ? 'decay' 
+    : (config.predictionMode === 'relative' && m >= 2) ? 'relative' : 'absolute';
 
   const baseProbs = getBaseProbabilities();
 
@@ -113,7 +115,35 @@ export const calculatePrediction = (
   let matchedOrder = 0;
   let directional: { direction: 'forward' | 'backward' | 'stay' | 'half'; minSteps: number } | undefined;
 
-  if (mode === 'absolute') {
+  if (mode === 'decay') {
+    // --- EXPONENTIAL DECAY FREQUENCY MODE ---
+    const decayFactor = config.decayFactor !== undefined ? config.decayFactor : 0.95;
+    const weights: Record<Outcome, number> = {} as any;
+    for (const o of ALL_OUTCOMES) {
+      weights[o] = 0;
+    }
+
+    const totalSpins = history.length;
+    for (let i = 0; i < totalSpins; i++) {
+      const outcome = history[i];
+      const distance = totalSpins - 1 - i;
+      weights[outcome] += Math.pow(decayFactor, distance);
+    }
+
+    let sumWeights = 0;
+    for (const o of ALL_OUTCOMES) {
+      sumWeights += weights[o];
+    }
+
+    for (const o of ALL_OUTCOMES) {
+      pRawOutcomes[o] = (weights[o] + config.priorStrength * baseProbs[o]) / (sumWeights + config.priorStrength);
+    }
+
+    confidence = 'medium';
+    finalContext = totalSpins > 0 ? [history[totalSpins - 1]] : [];
+    finalContextCount = totalSpins;
+    matchedOrder = 0;
+  } else if (mode === 'absolute') {
     // --- ABSOLUTE MODE ---
     const overallCounts: Record<Outcome, number> = {} as any;
     for (const o of ALL_OUTCOMES) {

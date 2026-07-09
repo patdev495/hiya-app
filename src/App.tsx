@@ -40,6 +40,7 @@ const DEFAULT_CONFIG: Config = {
   minSupport: 5,
   predictionMode: 'absolute',
   useRegimeAdjuster: false,
+  decayFactor: 0.95,
 };
 
 // Color mapping for outcomes to make the UI look rich and easy to scan
@@ -110,6 +111,9 @@ export default function App() {
         }
         if (parsed.useRegimeAdjuster === undefined) {
           parsed.useRegimeAdjuster = false;
+        }
+        if (parsed.decayFactor === undefined) {
+          parsed.decayFactor = 0.95;
         }
         setConfig(parsed);
       }
@@ -547,7 +551,7 @@ export default function App() {
                   <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-3">
                     {t('predMode')}
                   </label>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     <button
                       onClick={() => updateConfigState({ ...config, predictionMode: 'absolute' })}
                       className={`py-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${config.predictionMode === 'absolute' ? 'bg-indigo-600 border-indigo-500 text-white font-black' : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-400'}`}
@@ -560,13 +564,44 @@ export default function App() {
                     >
                       {t('modeRelative')}
                     </button>
+                    <button
+                      onClick={() => updateConfigState({ ...config, predictionMode: 'decay' })}
+                      className={`py-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${config.predictionMode === 'decay' ? 'bg-indigo-600 border-indigo-500 text-white font-black' : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-400'}`}
+                    >
+                      {t('modeDecay')}
+                    </button>
                   </div>
                   <p className="text-[10px] text-slate-500 mt-2">
-                    {config.predictionMode === 'absolute' 
-                      ? t('absoluteDesc') 
-                      : t('relativeDesc')}
+                    {config.predictionMode === 'absolute' && t('absoluteDesc')}
+                    {config.predictionMode === 'relative' && t('relativeDesc')}
+                    {config.predictionMode === 'decay' && t('decayDesc')}
                   </p>
                 </div>
+
+                {/* Decay Factor (visible only in Decay mode) */}
+                {config.predictionMode === 'decay' && (
+                  <div>
+                    <div className="flex justify-between items-center mb-1">
+                      <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                        {t('decayFactorLabel')} (λ)
+                      </label>
+                      <span className="text-xs font-mono font-bold text-indigo-400">{config.decayFactor}</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0.80"
+                      max="0.99"
+                      step="0.01"
+                      value={config.decayFactor}
+                      onChange={(e) => updateConfigState({ ...config, decayFactor: parseFloat(e.target.value) })}
+                      className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                    />
+                    <div className="flex justify-between text-[10px] text-slate-500 mt-1">
+                      <span>0.80 ({t('fastDecay')})</span>
+                      <span>0.99 ({t('slowDecay')})</span>
+                    </div>
+                  </div>
+                )}
 
                 {/* Hot/Cold Cycle Adjuster Toggle */}
                 <div>
