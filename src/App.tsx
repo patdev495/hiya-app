@@ -235,6 +235,7 @@ export default function App() {
   const historyOutcomes = history.map(h => h.outcome);
   const prediction = calculatePrediction(historyOutcomes, config);
   const bettingSignal = calculateBettingSignal(historyOutcomes, prediction, config);
+  const activeModeToShow = bettingSignal.activeMode || config.predictionMode;
   const backtestSummary = calculateBacktest(historyOutcomes, config);
   const deckWindowStats = calculateDeckWindowStats(historyOutcomes, config.deckSize);
 
@@ -668,28 +669,36 @@ export default function App() {
                   </label>
                   <div className="grid grid-cols-3 gap-2">
                     <button
-                      onClick={() => updateConfigState({ ...config, predictionMode: 'absolute' })}
-                      className={`py-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${config.predictionMode === 'absolute' ? 'bg-indigo-600 border-indigo-500 text-white font-black' : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-400'}`}
+                      onClick={() => updateConfigState({ ...config, predictionMode: 'absolute', useAutoModeSwitch: false })}
+                      className={`py-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${activeModeToShow === 'absolute' ? 'bg-indigo-600 border-indigo-500 text-white font-black' : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-400'}`}
                     >
                       {t('modeAbsolute')}
                     </button>
                     <button
-                      onClick={() => updateConfigState({ ...config, predictionMode: 'relative' })}
-                      className={`py-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${config.predictionMode === 'relative' ? 'bg-indigo-600 border-indigo-500 text-white font-black' : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-400'}`}
+                      onClick={() => updateConfigState({ ...config, predictionMode: 'relative', useAutoModeSwitch: false })}
+                      className={`py-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${activeModeToShow === 'relative' ? 'bg-indigo-600 border-indigo-500 text-white font-black' : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-400'}`}
                     >
                       {t('modeRelative')}
                     </button>
                     <button
-                      onClick={() => updateConfigState({ ...config, predictionMode: 'decay' })}
-                      className={`py-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${config.predictionMode === 'decay' ? 'bg-indigo-600 border-indigo-500 text-white font-black' : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-400'}`}
+                      onClick={() => updateConfigState({ ...config, predictionMode: 'decay', useAutoModeSwitch: false })}
+                      className={`py-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${activeModeToShow === 'decay' ? 'bg-indigo-600 border-indigo-500 text-white font-black' : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-400'}`}
                     >
                       {t('modeDecay')}
                     </button>
                   </div>
                   <p className="text-[10px] text-slate-500 mt-2">
-                    {config.predictionMode === 'absolute' && t('absoluteDesc')}
-                    {config.predictionMode === 'relative' && t('relativeDesc')}
-                    {config.predictionMode === 'decay' && t('decayDesc')}
+                    {config.useAutoModeSwitch && history.length >= 30 ? (
+                      <span className="text-indigo-400 font-medium">
+                        {t('activeModeLabel')}: {t(`mode${activeModeToShow.charAt(0).toUpperCase()}${activeModeToShow.slice(1)}` as any)} {language === 'vi' ? '(Tối ưu tự động)' : '(Auto Optimized)'}
+                      </span>
+                    ) : (
+                      <>
+                        {config.predictionMode === 'absolute' && t('absoluteDesc')}
+                        {config.predictionMode === 'relative' && t('relativeDesc')}
+                        {config.predictionMode === 'decay' && t('decayDesc')}
+                      </>
+                    )}
                   </p>
                 </div>
 
