@@ -137,4 +137,48 @@ describe('Betting Signal Engine', () => {
     expect(summary.hitsByTarget['x10-x15']?.attempts).toBeGreaterThan(0);
     expect(typeof summary.estimatedReturn).toBe('number');
   });
+
+  it('supports adaptive safety margin by scaling up when drift is detected', () => {
+    // Generate a history of 30 spins.
+    // The first 15 spins are x10.
+    // The next 15 spins alternate between non-x10/non-x15 outcomes, causing the model (which still predicts x10) to fail consistently.
+    const history: Outcome[] = [
+      ...Array(15).fill('x10'),
+      'x5_1', 'x5_2', 'x5_3', 'x5_4', 'x25', 'x45',
+      'x5_1', 'x5_2', 'x5_3', 'x5_4', 'x25', 'x45',
+      'x5_1', 'x5_2', 'x5_3'
+    ];
+
+    const config: Config = {
+      ...DEFAULT_CONFIG,
+      useAdaptiveSafety: true,
+    };
+
+    const prediction = calculatePrediction(history, config);
+    const signal = calculateBettingSignal(history, prediction, config);
+
+    expect(signal.isDriftDetected).toBe(true);
+    expect(signal.adaptiveSafetyMargin).toBe(2.0);
+  });
+
+  it('supports auto mode switching to select the mode with highest recent backtest return', () => {
+    // Create a history of 32 spins that is highly cyclical (offsets of +1 forward).
+    // This will perform extremely well in relative mode, but poorly in decay mode.
+    const history: Outcome[] = [];
+    const pattern: Outcome[] = ['x5_1', 'x5_2', 'x5_3', 'x5_4', 'x10', 'x15', 'x25', 'x45'];
+    for (let i = 0; i < 4; i++) {
+      history.push(...pattern);
+    }
+
+    const config: Config = {
+      ...DEFAULT_CONFIG,
+      useAutoModeSwitch: true,
+      predictionMode: 'decay', // Start with decay mode, which should be overridden
+    };
+
+    const prediction = calculatePrediction(history, config);
+    const signal = calculateBettingSignal(history, prediction, config);
+
+    expect(signal.activeMode).toBe('relative');
+  });
 });

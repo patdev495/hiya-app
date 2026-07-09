@@ -94,12 +94,13 @@ const downgradeForConflict = (
   return { action: 'probe', stakeLevel: 'probe' };
 };
 
-export const calculateBettingSignal = (
+const calculateBettingSignalInternal = (
   _history: Outcome[],
   prediction: PredictionResult,
-  _config: Config
+  _config: Config,
+  safetyMargin = DEFAULT_SAFETY_MARGIN
 ): BettingSignal => {
-  const candidates = getPlayableCandidates(prediction);
+  const candidates = getPlayableCandidates(prediction, safetyMargin);
   const exactX5Candidate = candidates.find((candidate) =>
     hasStrongExactX5Evidence(candidate, prediction, _config)
   );
@@ -151,6 +152,98 @@ export const calculateBettingSignal = (
       `${topCandidate.outcome} clears break-even plus safety margin.`,
       ...agreement.reasons,
     ],
+  };
+};
+
+const evaluateRecentPerformance = (
+  history: Outcome[],
+  config: Config
+): { netReturn: number; isDriftDetected: boolean } => {
+  const windowSize = 15;
+  const startIdx = Math.max(0, history.length - windowSize);
+  let activeBets = 0;
+  let netReturn = 0;
+  let wins = 0;
+
+  for (let i = startIdx; i < history.length; i++) {
+    const prefix = history.slice(0, i);
+    const actual = history[i];
+    const pred = calculatePrediction(prefix, config);
+    const signal = calculateBettingSignalInternal(prefix, pred, config);
+    
+    if (signal.action !== 'skip' && signal.target) {
+      activeBets++;
+      const isHit = targetMatchesOutcome(signal.target, actual);
+      if (isHit) {
+        wins++;
+        let multiplier = 5;
+        if (actual === 'x10') multiplier = 10;
+        else if (actual === 'x15') multiplier = 15;
+        else if (actual === 'x25') multiplier = 25;
+        else if (actual === 'x45') multiplier = 45;
+        netReturn += (multiplier - 1);
+      } else {
+        netReturn -= 1;
+      }
+    }
+  }
+
+  const isDriftDetected = activeBets >= 3 && (netReturn <= -2 || wins / activeBets < 0.15);
+  return { netReturn, isDriftDetected };
+};
+
+export const calculateBettingSignal = (
+  history: Outcome[],
+  prediction: PredictionResult,
+  config: Config
+): BettingSignal => {
+  let activeMode = config.predictionMode;
+  let activePrediction = prediction;
+  let activeConfig = config;
+
+  // 1. Auto Mode Switching
+  if (config.useAutoModeSwitch && history.length >= 30) {
+    const modes: ('absolute' | 'relative' | 'decay')[] = ['absolute', 'relative', 'decay'];
+    let bestMode = config.predictionMode;
+    let bestReturn = -Infinity;
+
+    for (const mode of modes) {
+      const modeConfig = { ...config, predictionMode: mode, useAutoModeSwitch: false, useAdaptiveSafety: false };
+      const backtest = calculateBacktest(history.slice(-30), modeConfig);
+      if (backtest.estimatedReturn > bestReturn) {
+        bestReturn = backtest.estimatedReturn;
+        bestMode = mode;
+      }
+    }
+
+    activeMode = bestMode;
+    if (activeMode !== config.predictionMode) {
+      activeConfig = { ...config, predictionMode: activeMode };
+      activePrediction = calculatePrediction(history, activeConfig);
+    }
+  }
+
+  // 2. Drift Detection
+  let isDriftDetected = false;
+  let activeSafetyMargin = DEFAULT_SAFETY_MARGIN;
+
+  if (config.useAdaptiveSafety && history.length >= 15) {
+    const evalConfig = { ...activeConfig, useAdaptiveSafety: false, useAutoModeSwitch: false };
+    const perf = evaluateRecentPerformance(history, evalConfig);
+    isDriftDetected = perf.isDriftDetected;
+    if (isDriftDetected) {
+      activeSafetyMargin = 2.0; // scale up safety margin to 2%
+    }
+  }
+
+  // 3. Compute final signal
+  const signal = calculateBettingSignalInternal(history, activePrediction, activeConfig, activeSafetyMargin);
+
+  return {
+    ...signal,
+    adaptiveSafetyMargin: activeSafetyMargin,
+    isDriftDetected,
+    activeMode,
   };
 };
 

@@ -44,6 +44,8 @@ const DEFAULT_CONFIG: Config = {
   decayFactor: 0.95,
   useDeckAdjuster: true,
   deckSize: 1000,
+  useAdaptiveSafety: true,
+  useAutoModeSwitch: true,
 };
 
 // Color mapping for outcomes to make the UI look rich and easy to scan
@@ -155,6 +157,12 @@ export default function App() {
         }
         if (parsed.deckSize === undefined) {
           parsed.deckSize = 1000;
+        }
+        if (parsed.useAdaptiveSafety === undefined) {
+          parsed.useAdaptiveSafety = true;
+        }
+        if (parsed.useAutoModeSwitch === undefined) {
+          parsed.useAutoModeSwitch = true;
         }
         setConfig(parsed);
       }
@@ -511,10 +519,15 @@ export default function App() {
                     <span className="text-xs text-slate-500">{t('edgeGate')}</span>
                   </div>
 
-                  <div className="mt-4 flex items-center gap-2">
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
                     <span className={`inline-flex items-center px-3.5 py-1.5 rounded-full text-sm font-bold border ${getSignalTone(bettingSignal.action)}`}>
                       {t(`signalAction_${bettingSignal.action}` as Exclude<keyof typeof translations['en'], 'displacementLabels'>)}
                     </span>
+                    {bettingSignal.isDriftDetected && (
+                      <span className="inline-flex items-center px-2 py-1 rounded-full text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/30 animate-pulse">
+                        ⚠️ {t('driftDetected')}
+                      </span>
+                    )}
                   </div>
 
                   <h2 className="text-3xl font-black text-white mt-4 tracking-tight">
@@ -528,6 +541,22 @@ export default function App() {
                     <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-2">
                       <div className="text-slate-500">{t('riskLevel')}</div>
                       <div className="font-bold text-slate-200 uppercase">{bettingSignal.risk}</div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 space-y-1.5 border-t border-slate-800/40 pt-3 text-[10px] text-slate-500">
+                    <div className="flex justify-between">
+                      <span>{t('activeSafetyMarginLabel')}:</span>
+                      <span className="font-mono font-semibold text-slate-300">
+                        {bettingSignal.adaptiveSafetyMargin}% 
+                        {bettingSignal.isDriftDetected && <span className="text-rose-400 ml-1">({t('adaptiveSafetyStatus')})</span>}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>{t('activeModeLabel')}:</span>
+                      <span className="font-semibold text-indigo-400 uppercase">
+                        {t(`mode${bettingSignal.activeMode ? bettingSignal.activeMode.charAt(0).toUpperCase() + bettingSignal.activeMode.slice(1) : 'Relative'}` as any)}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -793,6 +822,48 @@ export default function App() {
                     </div>
                   </div>
                 )}
+
+                {/* Adaptive Safety Margin Toggle */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
+                      {t('useAdaptiveSafety')}
+                    </label>
+                    <span className="text-[10px] text-indigo-400 font-bold bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20">
+                      {t('adaptiveSafetyStatus')}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => updateConfigState({ ...config, useAdaptiveSafety: !config.useAdaptiveSafety })}
+                    className={`w-full py-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${config.useAdaptiveSafety ? 'bg-indigo-600 border-indigo-500 text-white font-black' : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-400'}`}
+                  >
+                    {config.useAdaptiveSafety ? t('enabledOn') : t('disabledOff')}
+                  </button>
+                  <p className="text-[10px] text-slate-500 mt-2">
+                    {t('adaptiveSafetyDesc')}
+                  </p>
+                </div>
+
+                {/* Auto Mode Switching Toggle */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
+                      {t('useAutoModeSwitch')}
+                    </label>
+                    <span className="text-[10px] text-indigo-400 font-bold bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20">
+                      Auto Mode
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => updateConfigState({ ...config, useAutoModeSwitch: !config.useAutoModeSwitch })}
+                    className={`w-full py-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${config.useAutoModeSwitch ? 'bg-indigo-600 border-indigo-500 text-white font-black' : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-400'}`}
+                  >
+                    {config.useAutoModeSwitch ? t('enabledOn') : t('disabledOff')}
+                  </button>
+                  <p className="text-[10px] text-slate-500 mt-2">
+                    {t('autoModeSwitchDesc')}
+                  </p>
+                </div>
 
                 {/* Active History Window Presets */}
                 <div>

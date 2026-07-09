@@ -12,6 +12,8 @@ export interface Config {
   decayFactor: number;
   useDeckAdjuster: boolean;
   deckSize: number;
+  useAdaptiveSafety?: boolean;
+  useAutoModeSwitch?: boolean;
 }
 
 export interface PredictionResult {
@@ -58,6 +60,9 @@ export interface BettingSignal {
   candidates: BettingCandidate[];
   agreementScore: number;
   reasons: string[];
+  adaptiveSafetyMargin?: number;
+  isDriftDetected?: boolean;
+  activeMode?: PredictionMode;
 }
 
 export interface BacktestSummary {
