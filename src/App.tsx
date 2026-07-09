@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { calculatePrediction, ALL_OUTCOMES, MULTIPLIERS } from './predictionEngine';
 import type { Outcome, Config, HistoryItem } from './types';
+import { translations, type Language } from './locales';
 import { 
   History, 
   Trash2, 
@@ -19,15 +20,16 @@ import {
 const LOCAL_STORAGE_HISTORY_KEY = 'wheel_prediction_history_v1';
 const LOCAL_STORAGE_CONFIG_KEY = 'wheel_prediction_config_v1';
 
-const getDisplacementLabel = (shift: number): string => {
-  if (shift === 0) return 'Stay';
-  if (shift === 1) return '+1 (Fwd 1)';
-  if (shift === 2) return '+2 (Fwd 2)';
-  if (shift === 3) return '+3 (Fwd 3)';
-  if (shift === 4) return '±4 (Half)';
-  if (shift === 5) return '-3 (Bwd 3)';
-  if (shift === 6) return '-2 (Bwd 2)';
-  if (shift === 7) return '-1 (Bwd 1)';
+const getDisplacementLabel = (shift: number, lang: Language): string => {
+  const labels = translations[lang].displacementLabels;
+  if (shift === 0) return labels.stay;
+  if (shift === 1) return labels.fwd1;
+  if (shift === 2) return labels.fwd2;
+  if (shift === 3) return labels.fwd3;
+  if (shift === 4) return labels.half;
+  if (shift === 5) return labels.bwd3;
+  if (shift === 6) return labels.bwd2;
+  if (shift === 7) return labels.bwd1;
   return '';
 };
 
@@ -74,6 +76,23 @@ export default function App() {
   const [config, setConfig] = useState<Config>(DEFAULT_CONFIG);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingOutcome, setEditingOutcome] = useState<Outcome | ''>('');
+  const [language, setLanguage] = useState<Language>('vi');
+
+  useEffect(() => {
+    const storedLang = localStorage.getItem('wheel_prediction_lang');
+    if (storedLang === 'en' || storedLang === 'vi') {
+      setLanguage(storedLang);
+    }
+  }, []);
+
+  const handleSetLanguage = (lang: Language) => {
+    setLanguage(lang);
+    localStorage.setItem('wheel_prediction_lang', lang);
+  };
+
+  const t = (key: Exclude<keyof typeof translations['en'], 'displacementLabels'>): string => {
+    return (translations[language][key] || translations['en'][key] || key) as string;
+  };
 
   // Load from localStorage on mount
   useEffect(() => {
@@ -145,7 +164,7 @@ export default function App() {
   };
 
   const handleClearHistory = () => {
-    if (window.confirm('Are you sure you want to clear all spin history?')) {
+    if (window.confirm(t('confirmReset'))) {
       updateHistoryState([]);
     }
   };
@@ -184,21 +203,37 @@ export default function App() {
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
               </span>
-              <span className="text-xs font-semibold tracking-widest text-indigo-400 uppercase">Live Prediction System</span>
+              <span className="text-xs font-semibold tracking-widest text-indigo-400 uppercase">{t('liveSystem')}</span>
             </div>
-            <h1 className="text-3xl font-extrabold tracking-tight text-white mt-1">Wheel Outcome Predictor</h1>
+            <h1 className="text-3xl font-extrabold tracking-tight text-white mt-1">{t('title')}</h1>
             <p className="text-slate-400 text-sm mt-1">
-              Event-driven blended Markov model with Bayesian smoothing
+              {t('subtitle')}
             </p>
           </div>
           
           <div className="flex items-center gap-3">
+            {/* Language Selector */}
+            <div className="flex items-center gap-1.5 border-r border-slate-800 pr-3 mr-1">
+              <button
+                onClick={() => handleSetLanguage('en')}
+                className={`px-2 py-1 text-xs font-bold rounded transition-colors cursor-pointer ${language === 'en' ? 'bg-indigo-600 text-white font-black' : 'text-slate-400 hover:text-slate-200 bg-slate-900/60 hover:bg-slate-800 border border-slate-800/40'}`}
+              >
+                EN
+              </button>
+              <button
+                onClick={() => handleSetLanguage('vi')}
+                className={`px-2 py-1 text-xs font-bold rounded transition-colors cursor-pointer ${language === 'vi' ? 'bg-indigo-600 text-white font-black' : 'text-slate-400 hover:text-slate-200 bg-slate-900/60 hover:bg-slate-800 border border-slate-800/40'}`}
+              >
+                VI
+              </button>
+            </div>
+
             <button
               onClick={handleLoadDemo}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-300 bg-slate-800 hover:bg-slate-700 border border-slate-700/60 rounded-lg transition-colors cursor-pointer"
             >
               <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              Load Demo Data
+              {t('loadDemo')}
             </button>
             <button
               onClick={handleClearHistory}
@@ -206,7 +241,7 @@ export default function App() {
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
             >
               <RotateCcw className="w-3.5 h-3.5" />
-              Reset App
+              {t('resetApp')}
             </button>
           </div>
         </header>
@@ -228,35 +263,35 @@ export default function App() {
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-medium text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
                       <TrendingUp className="w-3.5 h-3.5" />
-                      Prediction Lead
+                      {t('predictionLead')}
                     </span>
-                    <span className="text-xs text-slate-500">Event-driven</span>
+                    <span className="text-xs text-slate-500">{t('eventDriven')}</span>
                   </div>
                   {config.predictionMode === 'relative' && prediction.directional ? (
                     <>
                       <h2 className="text-4xl font-black text-white mt-4 tracking-tight">
                         {prediction.directional.direction === 'forward' && (
-                          <span className="text-emerald-400">TIẾN</span>
+                          <span className="text-emerald-400">{t('directionForward')}</span>
                         )}
                         {prediction.directional.direction === 'backward' && (
-                          <span className="text-rose-400">LÙI</span>
+                          <span className="text-rose-400">{t('directionBackward')}</span>
                         )}
                         {prediction.directional.direction === 'stay' && (
-                          <span className="text-slate-400">ĐỨNG IM</span>
+                          <span className="text-slate-400">{t('directionStay')}</span>
                         )}
                         {prediction.directional.direction === 'half' && (
-                          <span className="text-indigo-400">NỬA VÒNG</span>
+                          <span className="text-indigo-400">{t('directionHalf')}</span>
                         )}
                       </h2>
                       <p className="text-sm font-semibold text-slate-300 mt-2">
                         {prediction.directional.minSteps > 0 ? (
-                          <>Dịch chuyển: Tối thiểu {prediction.directional.minSteps} ô</>
+                          <>{t('displacementMin')} {prediction.directional.minSteps} {t('slots')}</>
                         ) : (
-                          <>Dịch chuyển: Không di chuyển</>
+                          <>{t('displacementNone')}</>
                         )}
                       </p>
                       <p className="text-xs text-slate-400 mt-1">
-                        Mục tiêu dự kiến: <strong className={OUTCOME_COLORS[prediction.topOutcome].text}>{prediction.topOutcome.toUpperCase().replace('_', ' ')}</strong>
+                        {t('targetOutcome')}: <strong className={OUTCOME_COLORS[prediction.topOutcome].text}>{prediction.topOutcome.toUpperCase().replace('_', ' ')}</strong>
                       </p>
                     </>
                   ) : (
@@ -271,7 +306,7 @@ export default function App() {
                         )}
                       </h2>
                       <p className="text-sm font-semibold text-slate-300 mt-2">
-                        Highest Current Probability: {prediction.probabilities[prediction.topOutcome]}%
+                        {t('highestProb')}: {prediction.probabilities[prediction.topOutcome]}%
                       </p>
                     </>
                   )}
@@ -280,35 +315,36 @@ export default function App() {
                 <div className="mt-6 flex items-start gap-2 text-xs text-slate-500 border-t border-slate-800/50 pt-3">
                   <Info className="w-4 h-4 text-slate-600 shrink-0 mt-0.5" />
                   <span>
-                    Highest current probability only. Not a guaranteed outcome. Each spin remains independent.
+                    {t('disclaimer')}
                   </span>
                 </div>
               </div>
 
+              {/* Confidence Indicator Card */}
               {/* Confidence Indicator Card */}
               <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800/80 rounded-2xl p-6 flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-medium text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
                       <Gauge className="w-3.5 h-3.5" />
-                      Evidence Support
+                      {t('evidenceSupport')}
                     </span>
-                    <span className="text-xs text-slate-500">min_support = {config.minSupport}</span>
+                    <span className="text-xs text-slate-500">{t('minSupport')} = {config.minSupport}</span>
                   </div>
                   
                   <div className="mt-4 flex items-center gap-3">
                     {prediction.confidence === 'high' ? (
                       <span className="inline-flex items-center px-3.5 py-1.5 rounded-full text-sm font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
                         <Flame className="w-4 h-4 mr-1.5 animate-pulse text-emerald-400" />
-                        High Confidence
+                        {t('highConfidence')}
                       </span>
                     ) : prediction.confidence === 'medium' ? (
                       <span className="inline-flex items-center px-3.5 py-1.5 rounded-full text-sm font-bold bg-amber-500/10 text-amber-400 border border-amber-500/30">
-                        Medium Confidence
+                        {t('mediumConfidence')}
                       </span>
                     ) : (
                       <span className="inline-flex items-center px-3.5 py-1.5 rounded-full text-sm font-bold bg-slate-800 text-slate-400 border border-slate-700">
-                        Low Confidence
+                        {t('lowConfidence')}
                       </span>
                     )}
                   </div>
@@ -316,11 +352,11 @@ export default function App() {
                   {/* Active Context Readout */}
                   <div className="mt-4 space-y-2">
                     <div className="text-xs text-slate-400">
-                      Active Markov context ({prediction.evidence.matchedOrder}-order):
+                      {t('activeContext')} ({prediction.evidence.matchedOrder}-{t('order')}):
                     </div>
                     <div className="flex flex-wrap items-center gap-1.5">
                       {prediction.evidence.activeContext.length === 0 ? (
-                        <span className="text-xs text-slate-600 italic">None (Prior probabilities dominant)</span>
+                        <span className="text-xs text-slate-600 italic">{t('nonePriorDominant')}</span>
                       ) : (
                         prediction.evidence.activeContext.map((c, i) => {
                           const color = OUTCOME_COLORS[c];
@@ -330,7 +366,7 @@ export default function App() {
                             const idx1 = ALL_OUTCOMES.indexOf(c);
                             const idx2 = ALL_OUTCOMES.indexOf(nextItem);
                             const shift = (idx2 - idx1 + 8) % 8;
-                            shiftLabel = getDisplacementLabel(shift);
+                            shiftLabel = getDisplacementLabel(shift, language);
                           }
                           return (
                             <div key={i} className="flex items-center gap-1.5">
@@ -350,18 +386,18 @@ export default function App() {
                       )}
                     </div>
                     <div className="text-xs text-slate-500 mt-1">
-                      Context seen <strong className="text-slate-300 font-semibold">{prediction.evidence.contextCount}</strong> times in active history.
+                      {t('contextSeen')} <strong className="text-slate-300 font-semibold">{prediction.evidence.contextCount}</strong> {t('timesInHistory')}
                     </div>
                   </div>
                 </div>
 
                 <div className="mt-4 border-t border-slate-800/50 pt-3 text-xs text-slate-500">
                   {prediction.confidence === 'low' ? (
-                    <span>Prior/Base distribution dominates. Patterns are sparse.</span>
+                    <span>{t('priorDominatesDesc')}</span>
                   ) : prediction.confidence === 'medium' ? (
-                    <span>Transition support is backed by lower-order patterns.</span>
+                    <span>{t('mediumSupportDesc')}</span>
                   ) : (
-                    <span>Strong support found for sequence-specific transitions.</span>
+                    <span>{t('strongSupportDesc')}</span>
                   )}
                 </div>
               </div>
@@ -372,9 +408,9 @@ export default function App() {
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-medium text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
                       <Flame className="w-3.5 h-3.5" />
-                      Payout Regime
+                      {t('payoutRegime')}
                     </span>
-                    <span className="text-xs text-slate-500">Last 15 spins</span>
+                    <span className="text-xs text-slate-500">{t('last15Spins')}</span>
                   </div>
 
                   <div className="mt-4 flex flex-col gap-2">
@@ -382,36 +418,36 @@ export default function App() {
                       <div className="flex items-center gap-2">
                         <span className="inline-flex items-center px-3.5 py-1.5 rounded-full text-sm font-bold bg-rose-500/10 text-rose-400 border border-rose-500/30">
                           <Flame className="w-4 h-4 mr-1.5 animate-pulse text-rose-400" />
-                          HOT (Payout / Nhả)
+                          {t('hotRegime')}
                         </span>
                       </div>
                     ) : (
                       <div className="flex items-center gap-2">
                         <span className="inline-flex items-center px-3.5 py-1.5 rounded-full text-sm font-bold bg-blue-500/10 text-blue-400 border border-blue-500/30">
                           <span className="w-2.5 h-2.5 mr-1.5 rounded-full bg-blue-500 animate-pulse" />
-                          COLD (Accumulating / Hút)
+                          {t('coldRegime')}
                         </span>
                       </div>
                     )}
                     
                     <div className="text-xs text-slate-400 mt-2">
-                      Large spins (≥ x10): <strong className="text-slate-200">{prediction.largeCount}/15</strong>
+                      {t('largeSpins')} (≥ x10): <strong className="text-slate-200">{prediction.largeCount}/15</strong>
                     </div>
 
                     <div className="text-[10px] text-slate-500 mt-1">
                       {prediction.regime === 'hot' 
-                        ? 'High multipliers clustered. Payout multiplier is boosted (1.5x).' 
-                        : 'Accumulating reward pool. High multipliers are damped (0.5x).'}
+                        ? t('hotRegimeDesc') 
+                        : t('coldRegimeDesc')}
                     </div>
                   </div>
                 </div>
 
                 <div className="mt-4 border-t border-slate-800/50 pt-3 flex items-center justify-between text-xs text-slate-500">
-                  <span>Adjuster Status:</span>
+                  <span>{t('adjusterStatus')}:</span>
                   {config.useRegimeAdjuster ? (
-                    <span className="text-emerald-400 font-bold">Active (ON)</span>
+                    <span className="text-emerald-400 font-bold">{t('activeOn')}</span>
                   ) : (
-                    <span className="text-slate-500 font-medium">Inactive (OFF)</span>
+                    <span className="text-slate-500 font-medium">{t('inactiveOff')}</span>
                   )}
                 </div>
               </div>
@@ -420,7 +456,7 @@ export default function App() {
             {/* Probability Distribution Cards */}
             <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800/80 rounded-2xl p-6">
               <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
-                Predicted Probability Distribution
+                {t('predictedDist')}
               </h3>
               
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
@@ -447,7 +483,7 @@ export default function App() {
                         <span className="text-2xl font-black text-white">{prob}%</span>
                         {isTop && (
                           <span className="text-[10px] text-indigo-400 font-bold uppercase tracking-wider">
-                            Lead
+                            {t('leadBadge')}
                           </span>
                         )}
                       </div>
@@ -467,9 +503,9 @@ export default function App() {
 
             {/* Record Outcome Panel */}
             <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800/80 rounded-2xl p-6 relative">
-              <h3 className="text-lg font-bold text-white mb-2">Record Wheel Outcome</h3>
+              <h3 className="text-lg font-bold text-white mb-2">{t('recordOutcome')}</h3>
               <p className="text-slate-400 text-xs mb-6">
-                Click a button after each spin. Physical slots are recorded separately.
+                {t('recordDesc')}
               </p>
               
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -502,33 +538,33 @@ export default function App() {
             <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800/80 rounded-2xl p-6">
               <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
                 <Sliders className="w-4 h-4 text-indigo-400" />
-                Model Configuration
+                {t('modelConfig')}
               </h3>
               
               <div className="space-y-6">
                 {/* Prediction Mode Selector */}
                 <div>
                   <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-3">
-                    Prediction Mode
+                    {t('predMode')}
                   </label>
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       onClick={() => updateConfigState({ ...config, predictionMode: 'absolute' })}
                       className={`py-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${config.predictionMode === 'absolute' ? 'bg-indigo-600 border-indigo-500 text-white font-black' : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-400'}`}
                     >
-                      Absolute (Slot)
+                      {t('modeAbsolute')}
                     </button>
                     <button
                       onClick={() => updateConfigState({ ...config, predictionMode: 'relative' })}
                       className={`py-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${config.predictionMode === 'relative' ? 'bg-indigo-600 border-indigo-500 text-white font-black' : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-400'}`}
                     >
-                      Relative (Shift)
+                      {t('modeRelative')}
                     </button>
                   </div>
                   <p className="text-[10px] text-slate-500 mt-2">
                     {config.predictionMode === 'absolute' 
-                      ? 'Analyzes transition patterns of specific slot occurrences.' 
-                      : 'Analyzes step displacements (forward/backward/stay) on the circular wheel.'}
+                      ? t('absoluteDesc') 
+                      : t('relativeDesc')}
                   </p>
                 </div>
 
@@ -536,27 +572,27 @@ export default function App() {
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
-                      Hot/Cold Adjuster
+                      {t('hotColdAdjuster')}
                     </label>
                     <span className="text-[10px] text-indigo-400 font-bold bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20">
-                      RTP Compensator
+                      {t('rtpCompensator')}
                     </span>
                   </div>
                   <button
                     onClick={() => updateConfigState({ ...config, useRegimeAdjuster: !config.useRegimeAdjuster })}
                     className={`w-full py-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${config.useRegimeAdjuster ? 'bg-indigo-600 border-indigo-500 text-white font-black' : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-400'}`}
                   >
-                    {config.useRegimeAdjuster ? 'Enabled (ON)' : 'Disabled (OFF)'}
+                    {config.useRegimeAdjuster ? t('enabledOn') : t('disabledOff')}
                   </button>
                   <p className="text-[10px] text-slate-500 mt-2">
-                    Adjusts/dampens outcomes based on whether machine is in a payout cluster.
+                    {t('adjusterDesc')}
                   </p>
                 </div>
 
                 {/* Active History Window Presets */}
                 <div>
                   <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-3">
-                    Active History Window
+                    {t('activeHistoryWindow')}
                   </label>
                   <div className="grid grid-cols-3 gap-2">
                     {[50, 100, 200].map((preset) => (
@@ -565,12 +601,12 @@ export default function App() {
                         onClick={() => updateConfigState({ ...config, historyWindow: preset })}
                         className={`py-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${config.historyWindow === preset ? 'bg-indigo-600 border-indigo-500 text-white font-black' : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-400'}`}
                       >
-                        {preset} Spins
+                        {preset} {t('presetSpins')}
                       </button>
                     ))}
                   </div>
                   <p className="text-[10px] text-slate-500 mt-2">
-                    Only the most recent outcomes are used to calculate transition patterns.
+                    {t('windowDesc')}
                   </p>
                 </div>
 
@@ -578,7 +614,7 @@ export default function App() {
                 <div>
                   <div className="flex justify-between items-center mb-1">
                     <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                      Prior Strength
+                      {t('priorStrength')}
                     </label>
                     <span className="text-xs font-mono font-bold text-indigo-400">{config.priorStrength}</span>
                   </div>
@@ -592,8 +628,8 @@ export default function App() {
                     className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
                   />
                   <div className="flex justify-between text-[10px] text-slate-500 mt-1">
-                    <span>5 (weak prior)</span>
-                    <span>50 (strong prior)</span>
+                    <span>5 ({t('weakPrior')})</span>
+                    <span>50 ({t('strongPrior')})</span>
                   </div>
                 </div>
 
@@ -601,7 +637,7 @@ export default function App() {
                 <div>
                   <div className="flex justify-between items-center mb-1">
                     <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                      Markov Order
+                      {t('markovOrder')}
                     </label>
                     <span className="text-xs font-mono font-bold text-indigo-400">{config.maxOrder}</span>
                   </div>
@@ -615,8 +651,8 @@ export default function App() {
                     className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
                   />
                   <div className="flex justify-between text-[10px] text-slate-500 mt-1">
-                    <span>1 (order 1)</span>
-                    <span>3 (order 3)</span>
+                    <span>1 ({t('orderLabel')} 1)</span>
+                    <span>3 ({t('orderLabel')} 3)</span>
                   </div>
                 </div>
 
@@ -624,7 +660,7 @@ export default function App() {
                 <div>
                   <div className="flex justify-between items-center mb-1">
                     <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                      Min Support
+                      {t('minSupportSlider')}
                     </label>
                     <span className="text-xs font-mono font-bold text-indigo-400">{config.minSupport}</span>
                   </div>
@@ -638,8 +674,8 @@ export default function App() {
                     className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
                   />
                   <div className="flex justify-between text-[10px] text-slate-500 mt-1">
-                    <span>1 (low support)</span>
-                    <span>10 (high support)</span>
+                    <span>1 ({t('lowSupport')})</span>
+                    <span>10 ({t('highSupport')})</span>
                   </div>
                 </div>
               </div>
@@ -650,18 +686,18 @@ export default function App() {
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-bold text-white flex items-center gap-2">
                   <History className="w-4 h-4 text-indigo-400" />
-                  Spin Log
+                  {t('spinLog')}
                 </h3>
                 <span className="text-xs text-slate-500 font-semibold font-mono">
-                  Active: {activeCount}/{totalCount}
+                  {t('logActive')}: {activeCount}/{totalCount}
                 </span>
               </div>
 
               {history.length === 0 ? (
                 <div className="flex-1 py-12 flex flex-col items-center justify-center border border-dashed border-slate-800 rounded-xl">
                   <History className="w-8 h-8 text-slate-700 mb-2" />
-                  <p className="text-sm text-slate-500">No spin history recorded yet</p>
-                  <p className="text-xs text-slate-600 mt-1">Click demo data or record spin above</p>
+                  <p className="text-sm text-slate-500">{t('noHistory')}</p>
+                  <p className="text-xs text-slate-600 mt-1">{t('noHistoryDesc')}</p>
                 </div>
               ) : (
                 <div className="flex-1 overflow-y-auto pr-1 space-y-2">
@@ -720,14 +756,14 @@ export default function App() {
                               <button
                                 onClick={() => handleStartEdit(item)}
                                 className="p-1 text-slate-400 hover:text-indigo-400 hover:bg-slate-800 rounded transition-colors cursor-pointer"
-                                title="Edit Row"
+                                title={t('editRow')}
                               >
                                 <Edit2 className="w-3.5 h-3.5" />
                               </button>
                               <button
                                 onClick={() => handleDeleteItem(item.id)}
                                 className="p-1 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded transition-colors cursor-pointer"
-                                title="Delete Row"
+                                title={t('deleteRow')}
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
