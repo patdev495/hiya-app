@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { calculateDeckWindowStats, calculatePrediction, ALL_OUTCOMES, MULTIPLIERS } from './predictionEngine';
 import { calculateBacktest, calculateBettingSignal } from './bettingSignalEngine';
-import type { Outcome, Config, HistoryItem } from './types';
+import type { Outcome, Config, HistoryItem, PredictionMode } from './types';
 import { translations, type Language } from './locales';
 import { 
   History, 
@@ -116,6 +116,7 @@ export default function App() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingOutcome, setEditingOutcome] = useState<Outcome | ''>('');
   const [language, setLanguage] = useState<Language>('vi');
+  const [previewMode, setPreviewMode] = useState<PredictionMode | null>(null);
 
   useEffect(() => {
     const storedLang = localStorage.getItem('wheel_prediction_lang');
@@ -194,6 +195,7 @@ export default function App() {
       timestamp: Date.now(),
     };
     updateHistoryState([...history, newItem]);
+    setPreviewMode(null);
   };
 
   const handleStartEdit = (item: HistoryItem) => {
@@ -237,9 +239,24 @@ export default function App() {
 
   // Prediction calculation using only the history outcomes
   const historyOutcomes = history.map(h => h.outcome);
-  const prediction = calculatePrediction(historyOutcomes, config);
-  const bettingSignal = calculateBettingSignal(historyOutcomes, prediction, config);
-  const activeModeToShow = bettingSignal.activeMode || config.predictionMode;
+
+  // Calculate simulated returns for each mode over the configured autoModeWindow
+  const autoWindow = config.autoModeWindow || 30;
+  const autoHistory = historyOutcomes.slice(-autoWindow);
+  const modeReturns = {
+    absolute: calculateBacktest(autoHistory, { ...config, predictionMode: 'absolute', useAutoModeSwitch: false, useAdaptiveSafety: false }).estimatedReturn,
+    relative: calculateBacktest(autoHistory, { ...config, predictionMode: 'relative', useAutoModeSwitch: false, useAdaptiveSafety: false }).estimatedReturn,
+    decay: calculateBacktest(autoHistory, { ...config, predictionMode: 'decay', useAutoModeSwitch: false, useAdaptiveSafety: false }).estimatedReturn,
+  };
+
+  // If previewMode is active, override config for prediction and betting signal calculations
+  const activeConfigForPrediction = previewMode
+    ? { ...config, predictionMode: previewMode, useAutoModeSwitch: false }
+    : config;
+
+  const prediction = calculatePrediction(historyOutcomes, activeConfigForPrediction);
+  const bettingSignal = calculateBettingSignal(historyOutcomes, prediction, activeConfigForPrediction);
+  const activeModeToShow = previewMode || bettingSignal.activeMode || config.predictionMode;
   const backtestSummary = calculateBacktest(historyOutcomes, config);
   const deckWindowStats = calculateDeckWindowStats(historyOutcomes, config.deckSize);
 
@@ -672,30 +689,104 @@ export default function App() {
                     {t('predMode')}
                   </label>
                   <div className="grid grid-cols-3 gap-2">
+                    {/* Absolute Mode */}
                     <button
-                      onClick={() => updateConfigState({ ...config, predictionMode: 'absolute', useAutoModeSwitch: false })}
-                      className={`py-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${activeModeToShow === 'absolute' ? 'bg-indigo-600 border-indigo-500 text-white font-black' : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-400'}`}
+                      onClick={() => {
+                        if (config.useAutoModeSwitch) {
+                          setPreviewMode(previewMode === 'absolute' ? null : 'absolute');
+                        } else {
+                          updateConfigState({ ...config, predictionMode: 'absolute' });
+                        }
+                      }}
+                      className={`py-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${
+                        config.useAutoModeSwitch
+                          ? previewMode === 'absolute'
+                            ? 'bg-amber-600/30 border-amber-500 text-amber-300 font-extrabold shadow-[0_0_12px_rgba(245,158,11,0.2)]'
+                            : previewMode === null && activeModeToShow === 'absolute'
+                            ? 'bg-indigo-600 border-indigo-500 text-white font-black'
+                            : 'bg-slate-950/40 border-slate-900/60 text-slate-500 opacity-60 hover:opacity-100 hover:border-slate-800'
+                          : config.predictionMode === 'absolute'
+                          ? 'bg-indigo-600 border-indigo-500 text-white font-black'
+                          : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-400'
+                      }`}
                     >
-                      {t('modeAbsolute')}
+                      <div className="flex flex-col items-center">
+                        <span>{t('modeAbsolute')}</span>
+                        <span className={`text-[10px] font-mono mt-0.5 ${modeReturns.absolute > 0 ? 'text-emerald-400' : modeReturns.absolute < 0 ? 'text-rose-400' : 'text-slate-500'}`}>
+                          ({modeReturns.absolute > 0 ? '+' : ''}{modeReturns.absolute})
+                        </span>
+                      </div>
                     </button>
+
+                    {/* Relative Mode */}
                     <button
-                      onClick={() => updateConfigState({ ...config, predictionMode: 'relative', useAutoModeSwitch: false })}
-                      className={`py-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${activeModeToShow === 'relative' ? 'bg-indigo-600 border-indigo-500 text-white font-black' : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-400'}`}
+                      onClick={() => {
+                        if (config.useAutoModeSwitch) {
+                          setPreviewMode(previewMode === 'relative' ? null : 'relative');
+                        } else {
+                          updateConfigState({ ...config, predictionMode: 'relative' });
+                        }
+                      }}
+                      className={`py-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${
+                        config.useAutoModeSwitch
+                          ? previewMode === 'relative'
+                            ? 'bg-amber-600/30 border-amber-500 text-amber-300 font-extrabold shadow-[0_0_12px_rgba(245,158,11,0.2)]'
+                            : previewMode === null && activeModeToShow === 'relative'
+                            ? 'bg-indigo-600 border-indigo-500 text-white font-black'
+                            : 'bg-slate-950/40 border-slate-900/60 text-slate-500 opacity-60 hover:opacity-100 hover:border-slate-800'
+                          : config.predictionMode === 'relative'
+                          ? 'bg-indigo-600 border-indigo-500 text-white font-black'
+                          : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-400'
+                      }`}
                     >
-                      {t('modeRelative')}
+                      <div className="flex flex-col items-center">
+                        <span>{t('modeRelative')}</span>
+                        <span className={`text-[10px] font-mono mt-0.5 ${modeReturns.relative > 0 ? 'text-emerald-400' : modeReturns.relative < 0 ? 'text-rose-400' : 'text-slate-500'}`}>
+                          ({modeReturns.relative > 0 ? '+' : ''}{modeReturns.relative})
+                        </span>
+                      </div>
                     </button>
+
+                    {/* Decay Mode */}
                     <button
-                      onClick={() => updateConfigState({ ...config, predictionMode: 'decay', useAutoModeSwitch: false })}
-                      className={`py-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${activeModeToShow === 'decay' ? 'bg-indigo-600 border-indigo-500 text-white font-black' : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-400'}`}
+                      onClick={() => {
+                        if (config.useAutoModeSwitch) {
+                          setPreviewMode(previewMode === 'decay' ? null : 'decay');
+                        } else {
+                          updateConfigState({ ...config, predictionMode: 'decay' });
+                        }
+                      }}
+                      className={`py-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${
+                        config.useAutoModeSwitch
+                          ? previewMode === 'decay'
+                            ? 'bg-amber-600/30 border-amber-500 text-amber-300 font-extrabold shadow-[0_0_12px_rgba(245,158,11,0.2)]'
+                            : previewMode === null && activeModeToShow === 'decay'
+                            ? 'bg-indigo-600 border-indigo-500 text-white font-black'
+                            : 'bg-slate-950/40 border-slate-900/60 text-slate-500 opacity-60 hover:opacity-100 hover:border-slate-800'
+                          : config.predictionMode === 'decay'
+                          ? 'bg-indigo-600 border-indigo-500 text-white font-black'
+                          : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-400'
+                      }`}
                     >
-                      {t('modeDecay')}
+                      <div className="flex flex-col items-center">
+                        <span>{t('modeDecay')}</span>
+                        <span className={`text-[10px] font-mono mt-0.5 ${modeReturns.decay > 0 ? 'text-emerald-400' : modeReturns.decay < 0 ? 'text-rose-400' : 'text-slate-500'}`}>
+                          ({modeReturns.decay > 0 ? '+' : ''}{modeReturns.decay})
+                        </span>
+                      </div>
                     </button>
                   </div>
                   <p className="text-[10px] text-slate-500 mt-2">
                     {config.useAutoModeSwitch && history.length >= (config.autoModeWindow || 30) ? (
-                      <span className="text-indigo-400 font-medium">
-                        {t('activeModeLabel')}: {t(`mode${activeModeToShow.charAt(0).toUpperCase()}${activeModeToShow.slice(1)}` as any)} {language === 'vi' ? '(Tối ưu tự động)' : '(Auto Optimized)'}
-                      </span>
+                      previewMode ? (
+                        <span className="text-amber-400 font-medium">
+                          ⚠️ {language === 'vi' ? 'Đang xem tạm chế độ' : 'Previewing mode'}: {t(`mode${activeModeToShow.charAt(0).toUpperCase()}${activeModeToShow.slice(1)}` as any)}. {language === 'vi' ? 'Bấm lại để hủy xem tạm.' : 'Click again to cancel preview.'}
+                        </span>
+                      ) : (
+                        <span className="text-indigo-400 font-medium">
+                          {t('activeModeLabel')}: {t(`mode${activeModeToShow.charAt(0).toUpperCase()}${activeModeToShow.slice(1)}` as any)} {language === 'vi' ? '(Tối ưu tự động)' : '(Auto Optimized)'}
+                        </span>
+                      )
                     ) : (
                       <>
                         {config.predictionMode === 'absolute' && t('absoluteDesc')}
