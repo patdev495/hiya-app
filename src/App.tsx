@@ -19,11 +19,24 @@ import {
 const LOCAL_STORAGE_HISTORY_KEY = 'wheel_prediction_history_v1';
 const LOCAL_STORAGE_CONFIG_KEY = 'wheel_prediction_config_v1';
 
+const getDisplacementLabel = (shift: number): string => {
+  if (shift === 0) return 'Stay';
+  if (shift === 1) return '+1 (Fwd 1)';
+  if (shift === 2) return '+2 (Fwd 2)';
+  if (shift === 3) return '+3 (Fwd 3)';
+  if (shift === 4) return '±4 (Half)';
+  if (shift === 5) return '-3 (Bwd 3)';
+  if (shift === 6) return '-2 (Bwd 2)';
+  if (shift === 7) return '-1 (Bwd 1)';
+  return '';
+};
+
 const DEFAULT_CONFIG: Config = {
   historyWindow: 100,
   maxOrder: 2,
   priorStrength: 20,
   minSupport: 5,
+  predictionMode: 'absolute',
 };
 
 // Color mapping for outcomes to make the UI look rich and easy to scan
@@ -67,13 +80,15 @@ export default function App() {
       const storedHistory = localStorage.getItem(LOCAL_STORAGE_HISTORY_KEY);
       if (storedHistory) {
         setHistory(JSON.parse(storedHistory));
-      } else {
-        // Start empty or user can click demo history
       }
 
       const storedConfig = localStorage.getItem(LOCAL_STORAGE_CONFIG_KEY);
       if (storedConfig) {
-        setConfig(JSON.parse(storedConfig));
+        const parsed = JSON.parse(storedConfig);
+        if (!parsed.predictionMode) {
+          parsed.predictionMode = 'absolute';
+        }
+        setConfig(parsed);
       }
     } catch (e) {
       console.error('Error reading localStorage', e);
@@ -272,14 +287,31 @@ export default function App() {
                       {prediction.evidence.activeContext.length === 0 ? (
                         <span className="text-xs text-slate-600 italic">None (Prior probabilities dominant)</span>
                       ) : (
-                        prediction.evidence.activeContext.map((c, i) => (
-                          <span 
-                            key={i} 
-                            className={`text-xs px-2 py-0.5 rounded font-mono font-bold ${OUTCOME_COLORS[c].bg} ${OUTCOME_COLORS[c].text} border ${OUTCOME_COLORS[c].border}`}
-                          >
-                            {c}
-                          </span>
-                        ))
+                        prediction.evidence.activeContext.map((c, i) => {
+                          const color = OUTCOME_COLORS[c];
+                          const nextItem = prediction.evidence.activeContext[i + 1];
+                          let shiftLabel = '';
+                          if (nextItem && config.predictionMode === 'relative') {
+                            const idx1 = ALL_OUTCOMES.indexOf(c);
+                            const idx2 = ALL_OUTCOMES.indexOf(nextItem);
+                            const shift = (idx2 - idx1 + 8) % 8;
+                            shiftLabel = getDisplacementLabel(shift);
+                          }
+                          return (
+                            <div key={i} className="flex items-center gap-1.5">
+                              <span 
+                                className={`text-xs px-2 py-0.5 rounded font-mono font-bold ${color.bg} ${color.text} border ${color.border}`}
+                              >
+                                {c.toUpperCase()}
+                              </span>
+                              {shiftLabel && (
+                                <span className="text-[10px] text-indigo-400 font-bold bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20">
+                                  {shiftLabel}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })
                       )}
                     </div>
                     <div className="text-xs text-slate-500 mt-1">
@@ -389,6 +421,32 @@ export default function App() {
               </h3>
               
               <div className="space-y-6">
+                {/* Prediction Mode Selector */}
+                <div>
+                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-3">
+                    Prediction Mode
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => updateConfigState({ ...config, predictionMode: 'absolute' })}
+                      className={`py-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${config.predictionMode === 'absolute' ? 'bg-indigo-600 border-indigo-500 text-white font-black' : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-400'}`}
+                    >
+                      Absolute (Slot)
+                    </button>
+                    <button
+                      onClick={() => updateConfigState({ ...config, predictionMode: 'relative' })}
+                      className={`py-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${config.predictionMode === 'relative' ? 'bg-indigo-600 border-indigo-500 text-white font-black' : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-400'}`}
+                    >
+                      Relative (Shift)
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-slate-500 mt-2">
+                    {config.predictionMode === 'absolute' 
+                      ? 'Analyzes transition patterns of specific slot occurrences.' 
+                      : 'Analyzes step displacements (forward/backward/stay) on the circular wheel.'}
+                  </p>
+                </div>
+
                 {/* Active History Window Presets */}
                 <div>
                   <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-3">

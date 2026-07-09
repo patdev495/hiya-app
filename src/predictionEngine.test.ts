@@ -7,6 +7,7 @@ const DEFAULT_CONFIG: Config = {
   maxOrder: 2,
   priorStrength: 20,
   minSupport: 5,
+  predictionMode: 'absolute',
 };
 
 describe('Prediction Engine', () => {
@@ -143,5 +144,30 @@ describe('Prediction Engine', () => {
     // Since blending is used, both x15 (favored by order 2 context) and x25 (favored by order 1 context) should have elevated probabilities.
     expect(result.probabilities.x15).toBeGreaterThan(result.probabilities.x45);
     expect(result.probabilities.x25).toBeGreaterThan(result.probabilities.x45);
+  });
+
+  it('should fallback to absolute mode if history length < 2 in relative mode', () => {
+    const config: Config = { ...DEFAULT_CONFIG, predictionMode: 'relative' };
+    const result = calculatePrediction(['x5_1'], config);
+    expect(result.probabilities.x5_1).toBeGreaterThan(result.probabilities.x45);
+  });
+
+  it('should predict offset transitions in relative mode', () => {
+    const config: Config = { ...DEFAULT_CONFIG, predictionMode: 'relative' };
+    // +2 step shifts:
+    // x5_1 (0) -> x5_3 (2)
+    // x5_3 (2) -> x10 (4)
+    // x10 (4) -> x25 (6)
+    // x25 (6) -> x5_1 (0)
+    const history: Outcome[] = [
+      'x5_1', 'x5_3', 'x10', 'x25',
+      'x5_1', 'x5_3', 'x10', 'x25',
+      'x5_1', 'x5_3', 'x10', 'x25',
+      'x5_1'
+    ];
+    const result = calculatePrediction(history, config);
+    // Suffix is 'x5_1' (0). Step +2 leads to 'x5_3' (2).
+    expect(result.topOutcome).toBe('x5_3');
+    expect(result.probabilities.x5_3).toBeGreaterThan(50);
   });
 });
