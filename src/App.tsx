@@ -228,18 +228,49 @@ export default function App() {
                     </span>
                     <span className="text-xs text-slate-500">Event-driven</span>
                   </div>
-                  <h2 className="text-5xl font-black text-white mt-4 tracking-tight">
-                    {prediction.probabilities[prediction.topOutcome] > 0 ? (
-                      <span className={OUTCOME_COLORS[prediction.topOutcome].text}>
-                        {prediction.topOutcome.replace('_', ' ').toUpperCase()}
-                      </span>
-                    ) : (
-                      <span className="text-slate-500">None</span>
-                    )}
-                  </h2>
-                  <p className="text-sm font-semibold text-slate-300 mt-2">
-                    Highest Current Probability: {prediction.probabilities[prediction.topOutcome]}%
-                  </p>
+                  {config.predictionMode === 'relative' && prediction.directional ? (
+                    <>
+                      <h2 className="text-4xl font-black text-white mt-4 tracking-tight">
+                        {prediction.directional.direction === 'forward' && (
+                          <span className="text-emerald-400">TIẾN</span>
+                        )}
+                        {prediction.directional.direction === 'backward' && (
+                          <span className="text-rose-400">LÙI</span>
+                        )}
+                        {prediction.directional.direction === 'stay' && (
+                          <span className="text-slate-400">ĐỨNG IM</span>
+                        )}
+                        {prediction.directional.direction === 'half' && (
+                          <span className="text-indigo-400">NỬA VÒNG</span>
+                        )}
+                      </h2>
+                      <p className="text-sm font-semibold text-slate-300 mt-2">
+                        {prediction.directional.minSteps > 0 ? (
+                          <>Dịch chuyển: Tối thiểu {prediction.directional.minSteps} ô</>
+                        ) : (
+                          <>Dịch chuyển: Không di chuyển</>
+                        )}
+                      </p>
+                      <p className="text-xs text-slate-400 mt-1">
+                        Mục tiêu dự kiến: <strong className={OUTCOME_COLORS[prediction.topOutcome].text}>{prediction.topOutcome.toUpperCase().replace('_', ' ')}</strong>
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <h2 className="text-5xl font-black text-white mt-4 tracking-tight">
+                        {prediction.probabilities[prediction.topOutcome] > 0 ? (
+                          <span className={OUTCOME_COLORS[prediction.topOutcome].text}>
+                            {prediction.topOutcome.replace('_', ' ').toUpperCase()}
+                          </span>
+                        ) : (
+                          <span className="text-slate-500">None</span>
+                        )}
+                      </h2>
+                      <p className="text-sm font-semibold text-slate-300 mt-2">
+                        Highest Current Probability: {prediction.probabilities[prediction.topOutcome]}%
+                      </p>
+                    </>
+                  )}
                 </div>
                 
                 <div className="mt-6 flex items-start gap-2 text-xs text-slate-500 border-t border-slate-800/50 pt-3">

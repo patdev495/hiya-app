@@ -170,4 +170,18 @@ describe('Prediction Engine', () => {
     expect(result.topOutcome).toBe('x5_3');
     expect(result.probabilities.x5_3).toBeGreaterThan(50);
   });
+
+  it('should compute directional prediction correctly in relative mode', () => {
+    const config: Config = { ...DEFAULT_CONFIG, predictionMode: 'relative' };
+    // Every transition is a +3 step shift (x5_1 -> x5_4)
+    const history: Outcome[] = [
+      'x5_1', 'x5_4', 'x25', 'x5_2',
+      'x5_1', 'x5_4', 'x25', 'x5_2',
+      'x5_1', 'x5_4'
+    ];
+    const result = calculatePrediction(history, config);
+    expect(result.directional).toBeDefined();
+    expect(result.directional?.direction).toBe('forward');
+    expect(result.directional?.minSteps).toBe(3);
+  });
 });

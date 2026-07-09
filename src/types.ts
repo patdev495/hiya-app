@@ -20,6 +20,10 @@ export interface PredictionResult {
     contextCount: number;
     matchedOrder: number;
   };
+  directional?: {
+    direction: 'forward' | 'backward' | 'stay' | 'half';
+    minSteps: number;
+  };
 }
 
 export interface HistoryItem {

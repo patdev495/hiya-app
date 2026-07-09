@@ -310,6 +310,53 @@ export const calculatePrediction = (
     // Context mapped back to outcomes for type safety and UI consistency
     const finalContext = activeHistory.slice(-matchedOrder);
 
+    // Calculate directional trends
+    const pFwd = (pPrevShift[1] || 0) + (pPrevShift[2] || 0) + (pPrevShift[3] || 0);
+    const pBwd = (pPrevShift[5] || 0) + (pPrevShift[6] || 0) + (pPrevShift[7] || 0);
+    const pStay = pPrevShift[0] || 0;
+    const pHalf = pPrevShift[4] || 0;
+
+    let direction: 'forward' | 'backward' | 'stay' | 'half' = 'stay';
+    let maxGroupVal = pStay;
+
+    if (pFwd > maxGroupVal) {
+      direction = 'forward';
+      maxGroupVal = pFwd;
+    }
+    if (pBwd > maxGroupVal) {
+      direction = 'backward';
+      maxGroupVal = pBwd;
+    }
+    if (pHalf > maxGroupVal) {
+      direction = 'half';
+      maxGroupVal = pHalf;
+    }
+
+    let minSteps = 0;
+    if (direction === 'half') {
+      minSteps = 4;
+    } else if (direction === 'forward') {
+      const p3Cond = (pPrevShift[3] || 0) / (pFwd || 1);
+      const p2PlusCond = ((pPrevShift[2] || 0) + (pPrevShift[3] || 0)) / (pFwd || 1);
+      if (p3Cond >= 0.35) {
+        minSteps = 3;
+      } else if (p2PlusCond >= 0.65) {
+        minSteps = 2;
+      } else {
+        minSteps = 1;
+      }
+    } else if (direction === 'backward') {
+      const p3Cond = (pPrevShift[5] || 0) / (pBwd || 1); // shift 5 is Bwd 3
+      const p2PlusCond = ((pPrevShift[5] || 0) + (pPrevShift[6] || 0)) / (pBwd || 1); // shift 5 and 6 are Bwd 3 and Bwd 2
+      if (p3Cond >= 0.35) {
+        minSteps = 3;
+      } else if (p2PlusCond >= 0.65) {
+        minSteps = 2;
+      } else {
+        minSteps = 1;
+      }
+    }
+
     return {
       activeHistory,
       probabilities,
@@ -319,6 +366,10 @@ export const calculatePrediction = (
         activeContext: finalContext,
         contextCount: finalOffsetContextCount,
         matchedOrder
+      },
+      directional: {
+        direction,
+        minSteps
       }
     };
   }
