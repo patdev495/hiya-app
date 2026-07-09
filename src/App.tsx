@@ -80,6 +80,27 @@ const formatSignalTarget = (target: string | null): string => {
   return target ? target.replace('_', ' ').toUpperCase() : 'SKIP';
 };
 
+const translateReason = (reason: string, lang: Language): string => {
+  if (lang === 'en') return reason;
+  
+  // Match outcome clear message (e.g. x5_3 clears break-even plus safety margin.)
+  const outcomeClearMatch = reason.match(/^(\w+) clears break-even plus safety margin\.$/);
+  if (outcomeClearMatch) {
+    return `${outcomeClearMatch[1].toUpperCase()} vượt điểm hòa vốn + biên an toàn.`;
+  }
+  
+  const dict: Record<string, string> = {
+    'Exact x5 slot has strong supported evidence.': 'Ô x5 cụ thể có bằng chứng hỗ trợ mạnh mẽ.',
+    'No outcome clears break-even plus safety margin.': 'Không có ô nào vượt điểm hòa vốn + biên an toàn.',
+    'Only generic x5 outcomes cleared the edge gate; exact-slot support is required.': 'Chỉ có các ô x5 chung vượt ngưỡng; yêu cầu hỗ trợ ô cụ thể.',
+    'Hot regime supports large-outcome targets.': 'Chế độ Hot hỗ trợ mục tiêu ô nhân lớn.',
+    'Cold regime conflicts with large-outcome targets.': 'Chế độ Cold xung đột với mục tiêu ô nhân lớn.',
+    'Transition evidence has medium or high support.': 'Bằng chứng chuyển cảnh có hỗ trợ trung bình hoặc cao.',
+  };
+  
+  return dict[reason] || reason;
+};
+
 const DEMO_HISTORY: Outcome[] = [
   'x5_1', 'x5_2', 'x10', 'x5_1', 'x5_2', 'x10', 'x5_1', 'x5_2', 'x15', 'x5_3',
   'x5_1', 'x5_2', 'x10', 'x5_1', 'x5_2', 'x10', 'x5_4', 'x25', 'x5_1', 'x5_2',
@@ -515,7 +536,7 @@ export default function App() {
                   {bettingSignal.reasons.slice(0, 3).map((reason) => (
                     <div key={reason} className="text-[10px] text-slate-400 flex gap-1.5">
                       <span className="text-indigo-400">•</span>
-                      <span>{reason}</span>
+                      <span>{translateReason(reason, language)}</span>
                     </div>
                   ))}
                 </div>
