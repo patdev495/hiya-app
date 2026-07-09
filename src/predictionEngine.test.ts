@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calculatePrediction, getBaseProbabilities, ALL_OUTCOMES } from './predictionEngine';
+import { calculateDeckWindowStats, calculatePrediction, getBaseProbabilities, ALL_OUTCOMES } from './predictionEngine';
 import type { Config, Outcome } from './types';
 
 const DEFAULT_CONFIG: Config = {
@@ -249,5 +249,23 @@ describe('Prediction Engine', () => {
     const resUnderNoAdj = calculatePrediction(underHistory, DEFAULT_CONFIG);
     const resUnderWithAdj = calculatePrediction(underHistory, configWithDeck);
     expect(resUnderWithAdj.probabilities.x45).toBeGreaterThan(resUnderNoAdj.probabilities.x45);
+  });
+
+  it('should summarize outcome counts inside the configured deck window', () => {
+    const history: Outcome[] = [
+      ...Array(20).fill('x5_1'),
+      ...Array(5).fill('x10'),
+      ...Array(5).fill('x45')
+    ];
+
+    const stats = calculateDeckWindowStats(history, 10);
+
+    expect(stats.configuredSize).toBe(10);
+    expect(stats.windowSize).toBe(10);
+    expect(stats.outcomes.x10.count).toBe(5);
+    expect(stats.outcomes.x45.count).toBe(5);
+    expect(stats.outcomes.x5_1.count).toBe(0);
+    expect(stats.outcomes.x45.expected).toBeCloseTo(0.22, 2);
+    expect(stats.outcomes.x45.deviation).toBeCloseTo(4.78, 2);
   });
 });

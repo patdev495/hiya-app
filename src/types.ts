@@ -67,3 +67,16 @@ export interface BacktestSummary {
   hitsByTarget: Partial<Record<Outcome | TargetTier, { hits: number; attempts: number; hitRate: number }>>;
   estimatedReturn: number;
 }
+
+export interface DeckOutcomeStats {
+  outcome: Outcome;
+  count: number;
+  expected: number;
+  deviation: number;
+}
+
+export interface DeckWindowStats {
+  windowSize: number;
+  configuredSize: number;
+  outcomes: Record<Outcome, DeckOutcomeStats>;
+}

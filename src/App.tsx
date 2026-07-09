@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { calculatePrediction, ALL_OUTCOMES, MULTIPLIERS } from './predictionEngine';
+import { calculateDeckWindowStats, calculatePrediction, ALL_OUTCOMES, MULTIPLIERS } from './predictionEngine';
 import { calculateBacktest, calculateBettingSignal } from './bettingSignalEngine';
 import type { Outcome, Config, HistoryItem } from './types';
 import { translations, type Language } from './locales';
@@ -207,6 +207,7 @@ export default function App() {
   const prediction = calculatePrediction(historyOutcomes, config);
   const bettingSignal = calculateBettingSignal(historyOutcomes, prediction, config);
   const backtestSummary = calculateBacktest(historyOutcomes, config);
+  const deckWindowStats = calculateDeckWindowStats(historyOutcomes, config.deckSize);
 
   // Split history into active (within window) and older
   const activeCount = prediction.activeHistory.length;
@@ -711,7 +712,7 @@ export default function App() {
 
                 {/* Assumed Deck Size (visible only when Deck Adjuster is enabled) */}
                 {config.useDeckAdjuster && (
-                  <div>
+                  <div className="space-y-4">
                     <div className="flex justify-between items-center mb-1">
                       <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
                         {t('deckSizeLabel')}
@@ -721,7 +722,7 @@ export default function App() {
                     <input
                       type="range"
                       min="100"
-                      max="2000"
+                      max="5000"
                       step="100"
                       value={config.deckSize}
                       onChange={(e) => updateConfigState({ ...config, deckSize: parseInt(e.target.value) })}
@@ -729,7 +730,40 @@ export default function App() {
                     />
                     <div className="flex justify-between text-[10px] text-slate-500 mt-1">
                       <span>100 {t('deckSpins')}</span>
-                      <span>2000 {t('deckSpins')}</span>
+                      <span>5000 {t('deckSpins')}</span>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-800 bg-slate-950/40 overflow-hidden">
+                      <div className="flex items-center justify-between px-3 py-2 border-b border-slate-800 text-[10px] uppercase tracking-wider text-slate-500">
+                        <span>{t('deckWindowStats')}</span>
+                        <span>{deckWindowStats.windowSize}/{deckWindowStats.configuredSize}</span>
+                      </div>
+                      <div className="divide-y divide-slate-800/80">
+                        {ALL_OUTCOMES.map((outcome) => {
+                          const stats = deckWindowStats.outcomes[outcome];
+                          const color = OUTCOME_COLORS[outcome];
+                          const deviationTone = stats.deviation > 0
+                            ? 'text-rose-400'
+                            : stats.deviation < 0
+                              ? 'text-emerald-400'
+                              : 'text-slate-400';
+
+                          return (
+                            <div key={outcome} className="grid grid-cols-[1fr_auto_auto] gap-2 items-center px-3 py-2 text-xs">
+                              <span className={`font-mono font-bold ${color.text}`}>
+                                {outcome.toUpperCase()}
+                              </span>
+                              <span className="text-slate-300 font-semibold">
+                                {stats.count}
+                                <span className="text-slate-600 font-normal"> / {stats.expected}</span>
+                              </span>
+                              <span className={`font-mono font-bold ${deviationTone}`}>
+                                {stats.deviation > 0 ? '+' : ''}{stats.deviation}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
                 )}

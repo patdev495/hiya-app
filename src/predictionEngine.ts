@@ -1,4 +1,4 @@
-import type { Outcome, Config, PredictionResult } from './types';
+import type { DeckWindowStats, Outcome, Config, PredictionResult } from './types';
 
 export const ALL_OUTCOMES: Outcome[] = [
   'x5_1',
@@ -35,6 +35,32 @@ export const getBaseProbabilities = (): Record<Outcome, number> => {
     normalized[o] = raw[o] / sum;
   }
   return normalized;
+};
+
+export const calculateDeckWindowStats = (
+  history: Outcome[],
+  configuredSize: number
+): DeckWindowStats => {
+  const deckHistory = history.slice(-configuredSize);
+  const baseProbs = getBaseProbabilities();
+  const outcomes: DeckWindowStats['outcomes'] = {} as DeckWindowStats['outcomes'];
+
+  for (const outcome of ALL_OUTCOMES) {
+    const count = deckHistory.filter((item) => item === outcome).length;
+    const expected = Math.round(deckHistory.length * baseProbs[outcome] * 100) / 100;
+    outcomes[outcome] = {
+      outcome,
+      count,
+      expected,
+      deviation: Math.round((count - expected) * 100) / 100,
+    };
+  }
+
+  return {
+    windowSize: deckHistory.length,
+    configuredSize,
+    outcomes,
+  };
 };
 
 // Count occurrences of context and its transitions in the history
