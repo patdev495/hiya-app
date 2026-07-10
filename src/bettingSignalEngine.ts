@@ -35,9 +35,12 @@ const getMultiTargetCandidates = (
     };
   }).sort((a, b) => b.edge - a.edge);
 
+  const largeSafety = safetyMargin;
+  const smallSafety = safetyMargin * 10;
+
   const largeTargets = LARGE_OUTCOMES.filter((outcome) => {
     const probability = prediction.probabilities[outcome];
-    const threshold = getBreakEvenPercent(outcome) * (isHot ? 2 : 3) + safetyMargin;
+    const threshold = getBreakEvenPercent(outcome) * (isHot ? 2 : 3) + largeSafety;
     return probability >= threshold;
   });
 
@@ -46,7 +49,7 @@ const getMultiTargetCandidates = (
     .sort((a, b) => prediction.probabilities[b] - prediction.probabilities[a]);
 
   const smallTargets = isHot
-    ? x5Targets.filter((outcome) => prediction.probabilities[outcome] > (30 + safetyMargin))
+    ? x5Targets.filter((outcome) => prediction.probabilities[outcome] > (30 + smallSafety))
     : x5Targets.slice(0, 2);
 
   return {
