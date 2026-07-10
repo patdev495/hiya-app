@@ -354,6 +354,36 @@ export default function App() {
     ])
   ) as Record<PredictionMode, typeof bettingSignal>;
 
+  // --- ENTROPY: Shannon entropy of recent history (normalized 0-100%) ---
+  const entropyWindow = regimeWindow; // reuse hotRegimeWindow (default 15)
+  const recentForEntropy = historyOutcomes.slice(-entropyWindow);
+  const historyEntropy = (() => {
+    if (recentForEntropy.length === 0) return 0;
+    const counts: Record<string, number> = {};
+    for (const o of recentForEntropy) {
+      counts[o] = (counts[o] || 0) + 1;
+    }
+    const n = recentForEntropy.length;
+    let h = 0;
+    for (const c of Object.values(counts)) {
+      const p = c / n;
+      if (p > 0) h -= p * Math.log2(p);
+    }
+    // Normalize: max entropy for 8 outcomes = log2(8) = 3
+    return Math.round((h / 3) * 100);
+  })();
+
+  // --- MODE CONSENSUS: outcomes recommended by ≥2 modes simultaneously ---
+  const modeConsensusTargets = (() => {
+    const targetCount: Record<string, number> = {};
+    for (const mode of predictionModes) {
+      for (const t of modeSignals[mode].targets ?? []) {
+        targetCount[t] = (targetCount[t] || 0) + 1;
+      }
+    }
+    return targetCount; // outcome -> how many modes recommend it
+  })();
+
   const getModeLabel = (mode: PredictionMode) => {
     return t(`mode${mode.charAt(0).toUpperCase()}${mode.slice(1)}` as any);
   };
@@ -389,6 +419,22 @@ export default function App() {
                 <span>{isHotRegime ? t('hotRegime') : t('coldRegime')}</span>
                 <span className="font-mono">{regimeLargeCount}/{regimeWindow}</span>
                 <span className="text-slate-500">≥ {regimeThreshold}</span>
+              </div>
+
+              <div
+                className={`inline-flex items-center gap-1 rounded-lg border px-2 py-0.5 text-[10px] font-bold ${
+                  historyEntropy <= 40
+                    ? 'border-violet-500/40 bg-violet-500/10 text-violet-300'
+                    : historyEntropy >= 80
+                      ? 'border-orange-500/40 bg-orange-500/10 text-orange-300'
+                      : 'border-slate-600/40 bg-slate-800/40 text-slate-400'
+                }`}
+                title={language === 'en'
+                  ? `Entropy: ${historyEntropy}% of max. Low = pattern exists. High = chaotic.`
+                  : `Entropy: ${historyEntropy}% tối đa. Thấp = có pattern. Cao = hỗn loạn.`}
+              >
+                <span>Entropy</span>
+                <span className="font-mono">{historyEntropy}%</span>
               </div>
 
               {bettingSignal.rtpActual !== undefined && (
@@ -552,16 +598,38 @@ export default function App() {
                           )}
                         </div>
                       </div>
-                      {stateLabel && (
-                        <span className={`shrink-0 rounded-md border px-2 py-0.5 text-[10px] font-black tracking-wider ${isPreview
-                            ? 'border-amber-500/50 bg-amber-500/10 text-amber-300'
-                            : isAutoSelected || isManualSelected
-                              ? 'border-indigo-500/50 bg-indigo-500/10 text-indigo-300'
-                              : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
-                          }`}>
-                          {stateLabel}
-                        </span>
-                      )}
+                      <div className="flex flex-col items-end gap-1 shrink-0">
+                        {stateLabel && (
+                          <span className={`rounded-md border px-2 py-0.5 text-[10px] font-black tracking-wider ${isPreview
+                              ? 'border-amber-500/50 bg-amber-500/10 text-amber-300'
+                              : isAutoSelected || isManualSelected
+                                ? 'border-indigo-500/50 bg-indigo-500/10 text-indigo-300'
+                                : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+                            }`}>
+                            {stateLabel}
+                          </span>
+                        )}
+                        {(() => {
+                          const modeTargets = modeSignals[mode].targets ?? [];
+                          const consensusHits = modeTargets.filter(t => (modeConsensusTargets[t] || 0) >= 2);
+                          if (consensusHits.length === 0) return null;
+                          const maxAgree = Math.max(...consensusHits.map(t => modeConsensusTargets[t] || 0));
+                          return (
+                            <span
+                              className={`rounded-md border px-2 py-0.5 text-[10px] font-black tracking-wider ${
+                                maxAgree === 3
+                                  ? 'border-fuchsia-500/50 bg-fuchsia-500/10 text-fuchsia-300'
+                                  : 'border-cyan-500/50 bg-cyan-500/10 text-cyan-300'
+                              }`}
+                              title={language === 'en'
+                                ? `${maxAgree}/3 modes agree on same target`
+                                : `${maxAgree}/3 chế độ đồng thuận cùng target`}
+                            >
+                              {maxAgree}/3
+                            </span>
+                          );
+                        })()}
+                      </div>
                     </div>
 
                     <div className="mt-3 grid grid-cols-2 gap-1.5">
