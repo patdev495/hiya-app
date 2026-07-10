@@ -538,6 +538,19 @@ export default function App() {
                             💀 {modeBacktests[mode].maxConsecutiveLosses || 0}
                           </span>
                         </div>
+                        <div className="flex items-center gap-2 mt-0.5 text-[10px] font-bold font-mono">
+                          {modeBacktests[mode].currentWinStreak > 0 ? (
+                            <span className="text-emerald-300" title={language === 'en' ? 'Current win streak' : 'Chuỗi thắng hiện tại'}>
+                              ↗ +{modeBacktests[mode].currentWinStreak}W
+                            </span>
+                          ) : modeBacktests[mode].currentLossStreak > 0 ? (
+                            <span className="text-rose-300" title={language === 'en' ? 'Current loss streak' : 'Chuỗi thua hiện tại'}>
+                              ↘ -{modeBacktests[mode].currentLossStreak}L
+                            </span>
+                          ) : (
+                            <span className="text-slate-700">—</span>
+                          )}
+                        </div>
                       </div>
                       {stateLabel && (
                         <span className={`shrink-0 rounded-md border px-2 py-0.5 text-[10px] font-black tracking-wider ${isPreview

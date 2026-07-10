@@ -89,6 +89,8 @@ export interface BacktestSummary {
   estimatedReturn: number;
   maxConsecutiveWins: number;
   maxConsecutiveLosses: number;
+  currentWinStreak: number;
+  currentLossStreak: number;
 }
 
 export interface DeckOutcomeStats {

@@ -311,6 +311,8 @@ export const calculateBacktest = (
     estimatedReturn: 0,
     maxConsecutiveWins: 0,
     maxConsecutiveLosses: 0,
+    currentWinStreak: 0,
+    currentLossStreak: 0,
   };
 
   let currentWins = 0;
@@ -367,5 +369,7 @@ export const calculateBacktest = (
   summary.estimatedReturn = Math.round(summary.estimatedReturn * 100) / 100;
   summary.maxConsecutiveWins = maxConsecutiveWins;
   summary.maxConsecutiveLosses = maxConsecutiveLosses;
+  summary.currentWinStreak = currentWins;
+  summary.currentLossStreak = currentLosses;
   return summary;
 };
