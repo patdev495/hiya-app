@@ -19,7 +19,8 @@ const isHotByRecentLargeOutcomes = (history: Outcome[], config: Config): boolean
 const getMultiTargetCandidates = (
   prediction: PredictionResult,
   history: Outcome[],
-  config: Config
+  config: Config,
+  safetyMargin = DEFAULT_SAFETY_MARGIN
 ): { targets: Outcome[]; candidates: BettingCandidate[]; reasons: string[] } => {
   const isHot = isHotByRecentLargeOutcomes(history, config);
   const candidates: BettingCandidate[] = ALL_OUTCOMES.map((outcome) => {
@@ -36,7 +37,7 @@ const getMultiTargetCandidates = (
 
   const largeTargets = LARGE_OUTCOMES.filter((outcome) => {
     const probability = prediction.probabilities[outcome];
-    const threshold = getBreakEvenPercent(outcome) * (isHot ? 2 : 3);
+    const threshold = getBreakEvenPercent(outcome) * (isHot ? 2 : 3) + safetyMargin;
     return probability >= threshold;
   });
 
@@ -45,7 +46,7 @@ const getMultiTargetCandidates = (
     .sort((a, b) => prediction.probabilities[b] - prediction.probabilities[a]);
 
   const smallTargets = isHot
-    ? x5Targets.filter((outcome) => prediction.probabilities[outcome] > 30)
+    ? x5Targets.filter((outcome) => prediction.probabilities[outcome] > (30 + safetyMargin))
     : x5Targets.slice(0, 2);
 
   return {
@@ -68,7 +69,7 @@ const calculateBettingSignalInternal = (
   _config: Config,
   _safetyMargin = DEFAULT_SAFETY_MARGIN
 ): BettingSignal => {
-  const { targets, candidates, reasons } = getMultiTargetCandidates(prediction, history, _config);
+  const { targets, candidates, reasons } = getMultiTargetCandidates(prediction, history, _config, _safetyMargin);
 
   if (targets.length === 0) {
     return {
@@ -160,6 +161,51 @@ const evaluateRecentPerformance = (
   return { netReturn, isDriftDetected };
 };
 
+const E_BASE = 7.7753; // Expected multiplier under base probabilities
+
+export const calculateActualRtp = (
+  history: Outcome[],
+  windowSize = 100,
+  theoreticalRtp = 96
+): { rtpActual: number; rtpDeviation: number } => {
+  if (history.length === 0) {
+    return { rtpActual: theoreticalRtp, rtpDeviation: 0 };
+  }
+  const recentHistory = history.slice(-windowSize);
+  let sumMultipliers = 0;
+  for (const outcome of recentHistory) {
+    sumMultipliers += MULTIPLIERS[outcome] || 5;
+  }
+  const averageMultiplier = sumMultipliers / recentHistory.length;
+  const rtpActual = Math.round(((averageMultiplier / E_BASE) * theoreticalRtp) * 100) / 100;
+  const rtpDeviation = Math.round((rtpActual - theoreticalRtp) * 100) / 100;
+  return { rtpActual, rtpDeviation };
+};
+
+export const calculateKellyBets = (
+  targets: Outcome[],
+  prediction: PredictionResult,
+  bankroll: number,
+  kellyMultiplier = 0.25
+): Record<Outcome, number> => {
+  const bets: Record<Outcome, number> = {} as any;
+  for (const o of targets) {
+    const p = (prediction.probabilities[o] || 0) / 100; // convert to 0-1
+    const M = MULTIPLIERS[o] || 5;
+    const b = M - 1; // net decimal odds
+    
+    // Kelly fraction: f = (p * b - q) / b = (p * M - 1) / (M - 1)
+    const f = (p * M - 1) / b;
+    if (f > 0) {
+      const betAmount = Math.round(bankroll * f * kellyMultiplier);
+      if (betAmount > 0) {
+        bets[o] = betAmount;
+      }
+    }
+  }
+  return bets;
+};
+
 export const calculateBettingSignal = (
   history: Outcome[],
   prediction: PredictionResult,
@@ -175,10 +221,23 @@ export const calculateBettingSignal = (
     activePrediction = calculatePrediction(history, activeConfig);
   }
 
-  // 2. Drift Detection
-  let isDriftDetected = false;
+  // 2. RTP Adaptation
+  let rtpActual = config.theoreticalRtp || 96;
+  let rtpDeviation = 0;
   let activeSafetyMargin = DEFAULT_SAFETY_MARGIN;
 
+  if (config.useRtpAdaptation) {
+    const rtpStats = calculateActualRtp(history, config.rtpWindow || 100, config.theoreticalRtp || 96);
+    rtpActual = rtpStats.rtpActual;
+    rtpDeviation = rtpStats.rtpDeviation;
+    // safetyShift = (rtpDeviation / 100) * sensitivity
+    const sensitivity = config.rtpSensitivity !== undefined ? config.rtpSensitivity : 1.0;
+    const safetyShift = (rtpDeviation / 100) * sensitivity;
+    activeSafetyMargin = Math.max(0.01, Math.round((activeSafetyMargin + safetyShift) * 100) / 100);
+  }
+
+  // 3. Drift Detection
+  let isDriftDetected = false;
   if (config.useAdaptiveSafety && history.length >= 15) {
     const evalConfig = { ...activeConfig, useAdaptiveSafety: false, useAutoModeSwitch: false };
     const perf = evaluateRecentPerformance(history, evalConfig);
@@ -188,14 +247,28 @@ export const calculateBettingSignal = (
     }
   }
 
-  // 3. Compute final signal
+  // 4. Compute final signal
   const signal = calculateBettingSignalInternal(history, activePrediction, activeConfig, activeSafetyMargin);
+
+  // 5. Compute Kelly bets if enabled
+  let recommendedBets: Record<Outcome, number> | undefined = undefined;
+  if (config.useKellyCriterion && signal.targets && signal.targets.length > 0) {
+    recommendedBets = calculateKellyBets(
+      signal.targets,
+      activePrediction,
+      config.bankroll || 1000000,
+      config.kellyMultiplier !== undefined ? config.kellyMultiplier : 0.25
+    );
+  }
 
   return {
     ...signal,
     adaptiveSafetyMargin: activeSafetyMargin,
     isDriftDetected,
     activeMode,
+    rtpActual,
+    rtpDeviation,
+    recommendedBets,
   };
 };
 

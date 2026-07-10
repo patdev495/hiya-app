@@ -17,6 +17,13 @@ export interface Config {
   autoModeWindow?: number;
   hotRegimeWindow?: number;
   hotRegimeThreshold?: number;
+  bankroll?: number;
+  theoreticalRtp?: number;
+  rtpWindow?: number;
+  useRtpAdaptation?: boolean;
+  rtpSensitivity?: number;
+  useKellyCriterion?: boolean;
+  kellyMultiplier?: number;
 }
 
 export interface PredictionResult {
@@ -69,6 +76,9 @@ export interface BettingSignal {
   adaptiveSafetyMargin?: number;
   isDriftDetected?: boolean;
   activeMode?: PredictionMode;
+  rtpActual?: number;
+  rtpDeviation?: number;
+  recommendedBets?: Partial<Record<Outcome, number>>;
 }
 
 export interface BacktestSummary {

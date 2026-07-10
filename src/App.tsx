@@ -56,6 +56,13 @@ const DEFAULT_CONFIG: Config = {
   autoModeWindow: 3,
   hotRegimeWindow: 15,
   hotRegimeThreshold: 4,
+  bankroll: 1000000,
+  theoreticalRtp: 96,
+  rtpWindow: 100,
+  useRtpAdaptation: true,
+  rtpSensitivity: 1.0,
+  useKellyCriterion: true,
+  kellyMultiplier: 0.25,
 };
 
 // Color mapping for outcomes to make the UI look rich and easy to scan
@@ -193,6 +200,13 @@ export default function App() {
         if (parsed.hotRegimeThreshold === undefined) {
           parsed.hotRegimeThreshold = 4;
         }
+        if (parsed.bankroll === undefined) parsed.bankroll = 1000000;
+        if (parsed.theoreticalRtp === undefined) parsed.theoreticalRtp = 96;
+        if (parsed.rtpWindow === undefined) parsed.rtpWindow = 100;
+        if (parsed.useRtpAdaptation === undefined) parsed.useRtpAdaptation = true;
+        if (parsed.rtpSensitivity === undefined) parsed.rtpSensitivity = 1.0;
+        if (parsed.useKellyCriterion === undefined) parsed.useKellyCriterion = true;
+        if (parsed.kellyMultiplier === undefined) parsed.kellyMultiplier = 0.25;
         setConfig(parsed);
       }
     } catch (e) {
@@ -371,6 +385,22 @@ export default function App() {
                 <span className="font-mono">{regimeLargeCount}/{regimeWindow}</span>
                 <span className="text-slate-500">≥ {regimeThreshold}</span>
               </div>
+
+              {bettingSignal.rtpActual !== undefined && (
+                <div
+                  className={`inline-flex items-center gap-1.5 rounded-lg border px-2 py-0.5 text-[10px] font-bold ${
+                    (bettingSignal.rtpDeviation ?? 0) < 0
+                      ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+                      : 'border-rose-500/40 bg-rose-500/10 text-rose-300'
+                  }`}
+                  title={`${t('rtpActualLabel')}: ${bettingSignal.rtpActual}%, ${t('rtpDeviationLabel')}: ${bettingSignal.rtpDeviation}%`}
+                >
+                  <span>RTP: {bettingSignal.rtpActual}%</span>
+                  <span className="font-mono text-[9px] opacity-80">
+                    ({(bettingSignal.rtpDeviation ?? 0) >= 0 ? '+' : ''}{bettingSignal.rtpDeviation}%)
+                  </span>
+                </div>
+              )}
             </div>
             
             <h1 className="text-2xl font-black tracking-tight text-white mt-1.5">{t('title')}</h1>
@@ -551,16 +581,26 @@ export default function App() {
                   const color = OUTCOME_COLORS[o];
                   const reverseIdx = [...historyOutcomes].reverse().indexOf(o);
                   const drySpins = reverseIdx === -1 ? null : reverseIdx;
+                  const recommendedBet = config.useKellyCriterion ? bettingSignal.recommendedBets?.[o] : undefined;
                   return (
                     <button
                       key={o}
                       onClick={() => handleAddOutcome(o)}
-                      className={`h-16 px-3 border rounded-xl flex flex-col justify-center items-center text-center transition-all duration-200 active:scale-95 cursor-pointer bg-slate-950/60 ${color.border} hover:bg-slate-800 hover:border-slate-600 group relative overflow-hidden`}
+                      className={`h-16 px-3 border rounded-xl flex flex-col justify-center items-center text-center transition-all duration-200 active:scale-95 cursor-pointer bg-slate-950/60 ${color.border} hover:bg-slate-800 hover:border-slate-600 group relative overflow-hidden ${
+                        recommendedBet !== undefined
+                          ? 'ring-1 ring-emerald-500/40 shadow-[0_0_12px_rgba(16,185,129,0.15)] bg-emerald-500/5'
+                          : ''
+                      }`}
                     >
                       <span className="absolute top-1 right-1.5 text-[9px] font-mono text-slate-500">
                         {drySpins !== null ? `-${drySpins}` : '---'}
                       </span>
                       <span className={`text-xs font-black tracking-wide ${color.text}`}>{o.toUpperCase()}</span>
+                      {recommendedBet !== undefined && (
+                        <span className="absolute bottom-1 left-1.5 text-[9px] font-bold text-emerald-400 font-mono bg-emerald-500/10 px-1 py-0.5 rounded border border-emerald-500/20">
+                          {recommendedBet >= 1000 ? `${Math.round(recommendedBet / 1000)}k` : recommendedBet}
+                        </span>
+                      )}
                     </button>
                   );
                 })}
@@ -1394,6 +1434,146 @@ export default function App() {
                           <span>10 ({t('highSupport')})</span>
                         </div>
                       </div>
+
+                      {/* Bankroll Capital Setting */}
+                      <div>
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                            {t('bankrollLabel')}
+                          </label>
+                          <span className="text-xs font-mono font-bold text-indigo-400">{(config.bankroll || 1000000).toLocaleString()}</span>
+                        </div>
+                        <input
+                          type="number"
+                          value={config.bankroll || 1000000}
+                          onChange={(e) => updateConfigState({ ...config, bankroll: Math.max(0, parseInt(e.target.value) || 0) })}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
+
+                      {/* Adaptive RTP Adjuster */}
+                      <div>
+                        <div className="flex items-center justify-between mb-3">
+                          <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
+                            {t('useRtpAdaptation')}
+                          </label>
+                          <span className="text-[10px] text-indigo-400 font-bold bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20">
+                            RTP Adapt
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => updateConfigState({ ...config, useRtpAdaptation: !config.useRtpAdaptation })}
+                          className={`w-full py-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${config.useRtpAdaptation ? 'bg-indigo-600 border-indigo-500 text-white font-black' : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-400'}`}
+                        >
+                          {config.useRtpAdaptation ? t('enabledOn') : t('disabledOff')}
+                        </button>
+                        <p className="text-[10px] text-slate-500 mt-2">
+                          {t('useRtpAdaptationDesc')}
+                        </p>
+
+                        {config.useRtpAdaptation && (
+                          <div className="mt-4 space-y-4 border-t border-slate-800/40 pt-3">
+                            <div>
+                              <div className="flex justify-between items-center mb-1">
+                                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                                  {t('theoreticalRtpLabel')}
+                                </label>
+                                <span className="text-xs font-mono font-bold text-indigo-400">{config.theoreticalRtp || 96}%</span>
+                              </div>
+                              <input
+                                type="range"
+                                min="80"
+                                max="100"
+                                step="1"
+                                value={config.theoreticalRtp || 96}
+                                onChange={(e) => updateConfigState({ ...config, theoreticalRtp: parseInt(e.target.value) })}
+                                className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                              />
+                            </div>
+
+                            <div>
+                              <div className="flex justify-between items-center mb-1">
+                                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                                  {t('rtpWindowLabel')}
+                                </label>
+                                <span className="text-xs font-mono font-bold text-indigo-400">{config.rtpWindow || 100} {t('presetSpins')}</span>
+                              </div>
+                              <input
+                                type="range"
+                                min="10"
+                                max="500"
+                                step="10"
+                                value={config.rtpWindow || 100}
+                                onChange={(e) => updateConfigState({ ...config, rtpWindow: parseInt(e.target.value) })}
+                                className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                              />
+                            </div>
+
+                            <div>
+                              <div className="flex justify-between items-center mb-1">
+                                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                                  {t('rtpSensitivityLabel')}
+                                </label>
+                                <span className="text-xs font-mono font-bold text-indigo-400">{config.rtpSensitivity !== undefined ? config.rtpSensitivity : 1.0}</span>
+                              </div>
+                              <input
+                                type="range"
+                                min="0.1"
+                                max="5.0"
+                                step="0.1"
+                                value={config.rtpSensitivity !== undefined ? config.rtpSensitivity : 1.0}
+                                onChange={(e) => updateConfigState({ ...config, rtpSensitivity: parseFloat(e.target.value) })}
+                                className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Adaptive Kelly Capital Management */}
+                      <div>
+                        <div className="flex items-center justify-between mb-3">
+                          <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
+                            {t('useKellyCriterion')}
+                          </label>
+                          <span className="text-[10px] text-indigo-400 font-bold bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20">
+                            Kelly sizing
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => updateConfigState({ ...config, useKellyCriterion: !config.useKellyCriterion })}
+                          className={`w-full py-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${config.useKellyCriterion ? 'bg-indigo-600 border-indigo-500 text-white font-black' : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-400'}`}
+                        >
+                          {config.useKellyCriterion ? t('enabledOn') : t('disabledOff')}
+                        </button>
+                        <p className="text-[10px] text-slate-500 mt-2">
+                          {t('useKellyCriterionDesc')}
+                        </p>
+
+                        {config.useKellyCriterion && (
+                          <div className="mt-4 border-t border-slate-800/40 pt-3">
+                            <div className="flex justify-between items-center mb-1">
+                              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                                {t('kellyMultiplierLabel')}
+                              </label>
+                              <span className="text-xs font-mono font-bold text-indigo-400">{config.kellyMultiplier !== undefined ? config.kellyMultiplier : 0.25}</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0.05"
+                              max="1.00"
+                              step="0.05"
+                              value={config.kellyMultiplier !== undefined ? config.kellyMultiplier : 0.25}
+                              onChange={(e) => updateConfigState({ ...config, kellyMultiplier: parseFloat(e.target.value) })}
+                              className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                            />
+                            <div className="flex justify-between text-[10px] text-slate-500 mt-1">
+                              <span>0.05 (Low risk)</span>
+                              <span>1.00 (Full Kelly)</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1767,6 +1947,30 @@ export default function App() {
                     </div>
                   ))}
                 </div>
+
+                {config.useKellyCriterion && hoverBettingSignal.recommendedBets && Object.keys(hoverBettingSignal.recommendedBets).length > 0 && (
+                  <div className="mt-3 border-t border-slate-800/40 pt-2">
+                    <div className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider mb-1 flex items-center gap-1">
+                      <Sparkles className="w-3 h-3 text-amber-400" />
+                      {t('recommendedBetLabel')} (Kelly):
+                    </div>
+                    <div className="flex flex-col gap-1 font-mono text-xs">
+                      {Object.entries(hoverBettingSignal.recommendedBets).map(([outcome, bet]) => {
+                        const color = OUTCOME_COLORS[outcome as Outcome];
+                        return (
+                          <div key={outcome} className="flex justify-between items-center bg-slate-950/40 px-2.5 py-1 rounded border border-slate-800/40">
+                            <span className={`font-bold ${color.text}`}>
+                              {outcome.toUpperCase().replace('_', ' ')}
+                            </span>
+                            <span className="font-bold text-emerald-400">
+                              {bet.toLocaleString()}đ
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>

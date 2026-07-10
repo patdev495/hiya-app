@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { calculatePrediction } from './predictionEngine';
-import { calculateBacktest, calculateBettingSignal, selectActivePredictionMode } from './bettingSignalEngine';
+import { calculateBacktest, calculateBettingSignal, selectActivePredictionMode, calculateActualRtp, calculateKellyBets } from './bettingSignalEngine';
 import type { Config, Outcome } from './types';
 
 const DEFAULT_CONFIG: Config = {
@@ -321,5 +321,74 @@ describe('Betting Signal Engine', () => {
     const signalCustom = calculateBettingSignal(history, predCustom, configCustom);
     // Should auto-switch since 24 >= 20
     expect(signalCustom.activeMode).toBe('relative');
+  });
+
+  describe('RTP tracking & Kelly sizing', () => {
+    it('calculates actual RTP correctly', () => {
+      const emptyHistory: Outcome[] = [];
+      const statsEmpty = calculateActualRtp(emptyHistory, 10, 96);
+      expect(statsEmpty.rtpActual).toBe(96);
+      expect(statsEmpty.rtpDeviation).toBe(0);
+
+      // Low multipliers history (all x5_1)
+      const lowHistory: Outcome[] = Array(10).fill('x5_1');
+      const statsLow = calculateActualRtp(lowHistory, 10, 96);
+      // Expected multiplier for lowHistory is 5. E_BASE is 7.7753.
+      // (5 / 7.7753) * 96 = 61.73
+      expect(statsLow.rtpActual).toBe(61.73);
+      expect(statsLow.rtpDeviation).toBeLessThan(0);
+
+      // High multipliers history (all x45)
+      const highHistory: Outcome[] = Array(10).fill('x45');
+      const statsHigh = calculateActualRtp(highHistory, 10, 96);
+      // (45 / 7.7753) * 96 = 555.61
+      expect(statsHigh.rtpActual).toBe(555.61);
+      expect(statsHigh.rtpDeviation).toBeGreaterThan(0);
+    });
+
+    it('adapts safety margin based on RTP deviation', () => {
+      const lowHistory: Outcome[] = Array(10).fill('x5_1');
+      const config: Config = {
+        ...DEFAULT_CONFIG,
+        useRtpAdaptation: true,
+        rtpSensitivity: 1.0,
+        theoreticalRtp: 96,
+        rtpWindow: 10,
+      };
+
+      const prediction = predict(lowHistory, config);
+      const signal = calculateBettingSignal(lowHistory, prediction, config);
+
+      // Default safety margin is 0.5.
+      // Deviation is 61.73 - 96 = -34.27%
+      // Shift is -34.27 / 100 = -0.34
+      // Adjusted margin: 0.5 - 0.34 = 0.16
+      expect(signal.rtpActual).toBe(61.73);
+      expect(signal.rtpDeviation).toBe(-34.27);
+      expect(signal.adaptiveSafetyMargin).toBe(0.16);
+    });
+
+    it('calculates Kelly recommended bets correctly', () => {
+      const targets: Outcome[] = ['x5_1', 'x10'];
+      const prediction = {
+        activeHistory: [] as Outcome[],
+        probabilities: {
+          x5_1: 30, // 30% probability. Break-even is 20%. Net edge.
+          x10: 15,  // 15% probability. Break-even is 10%. Net edge.
+        } as any,
+        topOutcome: 'x5_1' as const,
+        confidence: 'high' as const,
+        evidence: { activeContext: [], contextCount: 0, matchedOrder: 0 },
+      };
+
+      const bets = calculateKellyBets(targets, prediction, 1000000, 0.25);
+      // For x5_1: p = 0.3, M = 5, b = 4. f = (0.3 * 5 - 1)/4 = 0.125.
+      // Bet size = 1,000,000 * 0.125 * 0.25 = 31250
+      expect(bets.x5_1).toBe(31250);
+
+      // For x10: p = 0.15, M = 10, b = 9. f = (0.15 * 10 - 1)/9 = 0.0555.
+      // Bet size = 1,000,000 * 0.0555 * 0.25 = 13889
+      expect(bets.x10).toBe(13889);
+    });
   });
 });
