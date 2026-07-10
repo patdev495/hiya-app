@@ -602,26 +602,16 @@ export default function App() {
                   const color = OUTCOME_COLORS[o];
                   const reverseIdx = [...historyOutcomes].reverse().indexOf(o);
                   const drySpins = reverseIdx === -1 ? null : reverseIdx;
-                  const recommendedBet = config.useKellyCriterion ? bettingSignal.recommendedBets?.[o] : undefined;
                   return (
                     <button
                       key={o}
                       onClick={() => handleAddOutcome(o)}
-                      className={`h-16 px-3 border rounded-xl flex flex-col justify-center items-center text-center transition-all duration-200 active:scale-95 cursor-pointer bg-slate-950/60 ${color.border} hover:bg-slate-800 hover:border-slate-600 group relative overflow-hidden ${
-                        recommendedBet !== undefined
-                          ? 'ring-1 ring-emerald-500/40 shadow-[0_0_12px_rgba(16,185,129,0.15)] bg-emerald-500/5'
-                          : ''
-                      }`}
+                      className={`h-16 px-3 border rounded-xl flex flex-col justify-center items-center text-center transition-all duration-200 active:scale-95 cursor-pointer bg-slate-950/60 ${color.border} hover:bg-slate-800 hover:border-slate-600 group relative overflow-hidden`}
                     >
                       <span className="absolute top-1 right-1.5 text-[9px] font-mono text-slate-500">
                         {drySpins !== null ? `-${drySpins}` : '---'}
                       </span>
                       <span className={`text-xs font-black tracking-wide ${color.text}`}>{o.toUpperCase()}</span>
-                      {recommendedBet !== undefined && (
-                        <span className="absolute bottom-1 left-1.5 text-[9px] font-bold text-emerald-400 font-mono bg-emerald-500/10 px-1 py-0.5 rounded border border-emerald-500/20">
-                          {recommendedBet >= 1000 ? `${Math.round(recommendedBet / 1000)}k` : recommendedBet}
-                        </span>
-                      )}
                     </button>
                   );
                 })}
