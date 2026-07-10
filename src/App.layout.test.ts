@@ -46,6 +46,14 @@ describe('App layout', () => {
     expect(modeCardSource).toContain("{modeReturnDelta > 0 ? '+' : ''}{modeReturnDelta}");
   });
 
+  it('uses full history for mode current streaks instead of the sliding return window', () => {
+    expect(appSource).toContain('const modeStreakBacktests = {');
+    expect(appSource).toContain("calculateBacktest(historyOutcomes, { ...config, predictionMode: 'absolute'");
+    expect(appSource).toContain('modeStreakBacktest={modeStreakBacktests[mode]}');
+    expect(modeCardSource).toContain('modeStreakBacktest.currentWinStreak');
+    expect(modeCardSource).toContain('modeStreakBacktest.currentLossStreak');
+  });
+
   it('allows the automatic evaluation window to start at one turn', () => {
     const labelIndex = settingsSource.indexOf("{t('autoModeWindowLabel')}");
     const nextRangeIndex = settingsSource.indexOf('type="range"', labelIndex);

@@ -220,6 +220,11 @@ export default function App() {
     relative: calculateBacktest(autoHistory, { ...config, predictionMode: 'relative', useAutoModeSwitch: false, useAdaptiveSafety: false }),
     decay: calculateBacktest(autoHistory, { ...config, predictionMode: 'decay', useAutoModeSwitch: false, useAdaptiveSafety: false }),
   };
+  const modeStreakBacktests = {
+    absolute: calculateBacktest(historyOutcomes, { ...config, predictionMode: 'absolute', useAutoModeSwitch: false, useAdaptiveSafety: false }),
+    relative: calculateBacktest(historyOutcomes, { ...config, predictionMode: 'relative', useAutoModeSwitch: false, useAdaptiveSafety: false }),
+    decay: calculateBacktest(historyOutcomes, { ...config, predictionMode: 'decay', useAutoModeSwitch: false, useAdaptiveSafety: false }),
+  };
   const modeReturns = {
     absolute: modeBacktests.absolute.estimatedReturn,
     relative: modeBacktests.relative.estimatedReturn,
@@ -508,6 +513,7 @@ export default function App() {
                     modePrediction={modePrediction}
                     modeSignal={modeSignal}
                     modeBacktest={modeBacktests[mode]}
+                    modeStreakBacktest={modeStreakBacktests[mode]}
                     modeConsensusTargets={modeConsensusTargets}
                     isPreview={isPreview}
                     isAutoSelected={!!isAutoSelected}

@@ -9,6 +9,7 @@ interface ModeCardProps {
   modePrediction: PredictionResult;
   modeSignal: BettingSignal;
   modeBacktest: BacktestSummary;
+  modeStreakBacktest: BacktestSummary;
   modeConsensusTargets: Record<string, number>;
   isPreview: boolean;
   isAutoSelected: boolean;
@@ -30,6 +31,7 @@ export default function ModeCard({
   modePrediction,
   modeSignal,
   modeBacktest,
+  modeStreakBacktest,
   modeConsensusTargets,
   isPreview,
   isAutoSelected,
@@ -94,19 +96,19 @@ export default function ModeCard({
             </span>
           </div>
           <div className="flex items-center gap-2 mt-0.5 text-[10px] font-bold font-mono">
-            {modeBacktest.currentWinStreak > 0 ? (
+            {modeStreakBacktest.currentWinStreak > 0 ? (
               <span
                 className="text-emerald-300"
                 title={language === 'en' ? 'Current win streak' : 'Chuỗi thắng hiện tại'}
               >
-                ↗ +{modeBacktest.currentWinStreak}W
+                ↗ +{modeStreakBacktest.currentWinStreak}W
               </span>
-            ) : modeBacktest.currentLossStreak > 0 ? (
+            ) : modeStreakBacktest.currentLossStreak > 0 ? (
               <span
                 className="text-rose-300"
                 title={language === 'en' ? 'Current loss streak' : 'Chuỗi thua hiện tại'}
               >
-                ↘ -{modeBacktest.currentLossStreak}L
+                ↘ -{modeStreakBacktest.currentLossStreak}L
               </span>
             ) : (
               <span className="text-slate-700">—</span>
