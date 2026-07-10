@@ -391,6 +391,28 @@ describe('Betting Signal Engine', () => {
       expect(bets.x10).toBe(13889);
     });
 
+    it('scales Kelly bets dynamically based on RTP deviation', () => {
+      const targets: Outcome[] = ['x5_1', 'x10'];
+      const prediction = {
+        activeHistory: [] as Outcome[],
+        probabilities: {
+          x5_1: 30,
+          x10: 15,
+        } as any,
+        topOutcome: 'x5_1' as const,
+        confidence: 'high' as const,
+        evidence: { activeContext: [], contextCount: 0, matchedOrder: 0 },
+      };
+
+      const betsNeg = calculateKellyBets(targets, prediction, 1000000, 0.25, -20);
+      expect(betsNeg.x5_1).toBe(25000);
+      expect(betsNeg.x10).toBe(19444);
+
+      const betsPos = calculateKellyBets(targets, prediction, 1000000, 0.25, 20);
+      expect(betsPos.x5_1).toBe(43750);
+      expect(betsPos.x10).toBe(8333);
+    });
+
     it('calculates max consecutive wins and losses streaks in backtest correctly', () => {
       const history: Outcome[] = [
         'x5_1', 'x5_1', 'x5_1', 'x5_1', 'x5_1',

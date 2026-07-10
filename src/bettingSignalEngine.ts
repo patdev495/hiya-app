@@ -189,7 +189,8 @@ export const calculateKellyBets = (
   targets: Outcome[],
   prediction: PredictionResult,
   bankroll: number,
-  kellyMultiplier = 0.25
+  kellyMultiplier = 0.25,
+  rtpDeviation = 0
 ): Record<Outcome, number> => {
   const bets: Record<Outcome, number> = {} as any;
   for (const o of targets) {
@@ -200,7 +201,24 @@ export const calculateKellyBets = (
     // Kelly fraction: f = (p * b - q) / b = (p * M - 1) / (M - 1)
     const f = (p * M - 1) / b;
     if (f > 0) {
-      const betAmount = Math.round(bankroll * f * kellyMultiplier);
+      // Calculate RTP adjustment multiplier
+      const isLarge = isLargeOutcome(o);
+      let rtpScale = 1.0;
+      if (isLarge) {
+        if (rtpDeviation < 0) {
+          rtpScale = 1.0 + Math.min(1.0, (Math.abs(rtpDeviation) / 100) * 2.0);
+        } else if (rtpDeviation > 0) {
+          rtpScale = Math.max(0.1, 1.0 - (rtpDeviation / 100) * 2.0);
+        }
+      } else {
+        if (rtpDeviation > 0) {
+          rtpScale = 1.0 + Math.min(1.0, (rtpDeviation / 100) * 2.0);
+        } else if (rtpDeviation < 0) {
+          rtpScale = Math.max(0.5, 1.0 - (Math.abs(rtpDeviation) / 100) * 1.0);
+        }
+      }
+
+      const betAmount = Math.round(bankroll * f * kellyMultiplier * rtpScale);
       if (betAmount > 0) {
         bets[o] = betAmount;
       }
@@ -260,7 +278,8 @@ export const calculateBettingSignal = (
       signal.targets,
       activePrediction,
       config.bankroll || 1000000,
-      config.kellyMultiplier !== undefined ? config.kellyMultiplier : 0.25
+      config.kellyMultiplier !== undefined ? config.kellyMultiplier : 0.25,
+      rtpDeviation
     );
   }
 
