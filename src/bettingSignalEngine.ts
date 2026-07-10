@@ -5,152 +5,95 @@ const DEFAULT_SAFETY_MARGIN = 0.5;
 
 const getBreakEvenPercent = (outcome: Outcome): number => 100 / MULTIPLIERS[outcome];
 
-const getPlayableCandidates = (
-  prediction: PredictionResult,
-  safetyMargin = DEFAULT_SAFETY_MARGIN
-): BettingCandidate[] => {
-  return ALL_OUTCOMES
-    .map((outcome) => {
-      const breakEven = getBreakEvenPercent(outcome);
-      const probability = prediction.probabilities[outcome];
-      return {
-        outcome,
-        probability,
-        breakEven,
-        edge: Math.round((probability - breakEven - safetyMargin) * 100) / 100,
-      };
-    })
-    .filter((candidate) => candidate.edge > 0)
-    .sort((a, b) => b.edge - a.edge);
-};
-
 const isX5Outcome = (outcome: Outcome): boolean => outcome.startsWith('x5_');
+const LARGE_OUTCOMES: Outcome[] = ['x10', 'x15', 'x25', 'x45'];
 
-const toBalancedTier = (outcome: Outcome): {
-  action: BettingAction;
-  stakeLevel: StakeLevel;
-  target: TargetTier;
-} => {
-  if (outcome === 'x25') {
-    return { action: 'probe', stakeLevel: 'probe', target: 'x25' };
-  }
-  if (outcome === 'x45') {
-    return { action: 'tiny-shot', stakeLevel: 'tiny-shot', target: 'x45' };
-  }
-  return { action: 'normal', stakeLevel: 'normal', target: 'x10-x15' };
+const isLargeOutcome = (outcome: Outcome): boolean => LARGE_OUTCOMES.includes(outcome);
+
+const isHotByRecentLargeOutcomes = (history: Outcome[], config: Config): boolean => {
+  const windowSize = config.hotRegimeWindow || 15;
+  const threshold = config.hotRegimeThreshold || 4;
+  return history.slice(-windowSize).filter(isLargeOutcome).length >= threshold;
 };
 
-const isLargeTier = (target: TargetTier): boolean => target !== 'x5';
-
-const scoreAgreement = (
+const getMultiTargetCandidates = (
   prediction: PredictionResult,
-  target: TargetTier
-): { score: number; reasons: string[]; hasConflict: boolean } => {
-  let score = 1;
-  let hasConflict = false;
-  const reasons: string[] = [];
-
-  if (isLargeTier(target)) {
-    if (prediction.regime === 'hot') {
-      score++;
-      reasons.push('Hot regime supports large-outcome targets.');
-    } else if (prediction.regime === 'cold') {
-      score--;
-      hasConflict = true;
-      reasons.push('Cold regime conflicts with large-outcome targets.');
-    }
-  }
-
-  if (prediction.confidence === 'medium' || prediction.confidence === 'high') {
-    score++;
-    reasons.push('Transition evidence has medium or high support.');
-  }
-
-  return { score: Math.max(0, score), reasons, hasConflict };
-};
-
-const hasStrongExactX5Evidence = (
-  candidate: BettingCandidate,
-  prediction: PredictionResult,
+  history: Outcome[],
   config: Config
-): boolean => {
-  return (
-    isX5Outcome(candidate.outcome) &&
-    candidate.outcome === prediction.topOutcome &&
-    prediction.evidence.contextCount >= config.minSupport &&
-    (prediction.confidence === 'medium' || prediction.confidence === 'high')
-  );
-};
+): { targets: Outcome[]; candidates: BettingCandidate[]; reasons: string[] } => {
+  const isHot = isHotByRecentLargeOutcomes(history, config);
+  const candidates: BettingCandidate[] = ALL_OUTCOMES.map((outcome) => {
+    const breakEven = getBreakEvenPercent(outcome);
+    const probability = prediction.probabilities[outcome];
+    const requiredMultiple = isLargeOutcome(outcome) ? (isHot ? 2 : 3) : 1;
+    return {
+      outcome,
+      probability,
+      breakEven,
+      edge: Math.round((probability - breakEven * requiredMultiple) * 100) / 100,
+    };
+  }).sort((a, b) => b.edge - a.edge);
 
-const downgradeForConflict = (
-  action: BettingAction,
-  stakeLevel: StakeLevel,
-  hasConflict: boolean
-): { action: BettingAction; stakeLevel: StakeLevel } => {
-  if (!hasConflict || action !== 'normal') {
-    return { action, stakeLevel };
-  }
+  const largeTargets = LARGE_OUTCOMES.filter((outcome) => {
+    const probability = prediction.probabilities[outcome];
+    const threshold = getBreakEvenPercent(outcome) * (isHot ? 2 : 3);
+    return probability >= threshold;
+  });
 
-  return { action: 'probe', stakeLevel: 'probe' };
+  const x5Targets = ALL_OUTCOMES
+    .filter(isX5Outcome)
+    .sort((a, b) => prediction.probabilities[b] - prediction.probabilities[a]);
+
+  const smallTargets = isHot
+    ? x5Targets.filter((outcome) => prediction.probabilities[outcome] > 30)
+    : x5Targets.slice(0, 2);
+
+  return {
+    targets: [...largeTargets, ...smallTargets],
+    candidates,
+    reasons: [
+      isHot
+        ? 'Hot regime: bet large outcomes above 2x break-even.'
+        : 'Non-hot regime: bet large outcomes above 3x break-even.',
+      isHot
+        ? 'Hot regime: bet x5 slots only above 30%.'
+        : 'Non-hot regime: always bet top two x5 slots.',
+    ],
+  };
 };
 
 const calculateBettingSignalInternal = (
-  _history: Outcome[],
+  history: Outcome[],
   prediction: PredictionResult,
   _config: Config,
-  safetyMargin = DEFAULT_SAFETY_MARGIN
+  _safetyMargin = DEFAULT_SAFETY_MARGIN
 ): BettingSignal => {
-  const candidates = getPlayableCandidates(prediction, safetyMargin);
-  const exactX5Candidate = candidates.find((candidate) =>
-    hasStrongExactX5Evidence(candidate, prediction, _config)
-  );
+  const { targets, candidates, reasons } = getMultiTargetCandidates(prediction, history, _config);
 
-  if (exactX5Candidate) {
-    return {
-      action: 'normal',
-      target: exactX5Candidate.outcome,
-      stakeLevel: 'normal',
-      risk: 'medium',
-      candidates,
-      agreementScore: 3,
-      reasons: [
-        `${exactX5Candidate.outcome} clears break-even plus safety margin.`,
-        'Exact x5 slot has strong supported evidence.',
-      ],
-    };
-  }
-
-  const balancedCandidates = candidates.filter((candidate) => !isX5Outcome(candidate.outcome));
-
-  if (balancedCandidates.length === 0) {
+  if (targets.length === 0) {
     return {
       action: 'skip',
       target: null,
+      targets: [],
       stakeLevel: 'skip',
       risk: 'low',
       candidates,
       agreementScore: 0,
-      reasons: candidates.length === 0
-        ? ['No outcome clears break-even plus safety margin.']
-        : ['Only generic x5 outcomes cleared the edge gate; exact-slot support is required.'],
+      reasons: ['No outcome qualifies under the current regime rules.', ...reasons],
     };
   }
 
-  const topCandidate = balancedCandidates[0];
-  const tier = toBalancedTier(topCandidate.outcome);
-  const agreement = scoreAgreement(prediction, tier.target);
-  const downgraded = downgradeForConflict(tier.action, tier.stakeLevel, agreement.hasConflict);
-
   return {
-    action: downgraded.action,
-    target: tier.target,
-    stakeLevel: downgraded.stakeLevel,
-    risk: downgraded.action === 'normal' ? 'medium' : 'high',
+    action: 'normal',
+    target: targets[0],
+    targets,
+    stakeLevel: 'normal',
+    risk: 'medium',
     candidates,
-    agreementScore: agreement.score,
+    agreementScore: targets.length,
     reasons: [
-      `${topCandidate.outcome} clears break-even plus safety margin.`,
-      ...agreement.reasons,
+      `Bet targets: ${targets.map((target) => target.toUpperCase()).join(', ')}.`,
+      ...reasons,
     ],
   };
 };
@@ -159,7 +102,7 @@ export const selectActivePredictionMode = (
   history: Outcome[],
   config: Config
 ): PredictionMode => {
-  const autoWindow = config.autoModeWindow || 30;
+  const autoWindow = config.autoModeWindow || 3;
   if (!config.useAutoModeSwitch || history.length < autoWindow) {
     return config.predictionMode;
   }
@@ -200,18 +143,13 @@ const evaluateRecentPerformance = (
     const actual = history[i];
     const pred = calculatePrediction(prefix, config);
     const signal = calculateBettingSignalInternal(prefix, pred, config);
-    
-    if (signal.action !== 'skip' && signal.target) {
+
+    const targets = signal.targets ?? (signal.target && ALL_OUTCOMES.includes(signal.target as Outcome) ? [signal.target as Outcome] : []);
+    for (const target of targets) {
       activeBets++;
-      const isHit = targetMatchesOutcome(signal.target, actual);
-      if (isHit) {
+      if (actual === target) {
         wins++;
-        let multiplier = 5;
-        if (actual === 'x10') multiplier = 10;
-        else if (actual === 'x15') multiplier = 15;
-        else if (actual === 'x25') multiplier = 25;
-        else if (actual === 'x45') multiplier = 45;
-        netReturn += (multiplier - 1);
+        netReturn += MULTIPLIERS[actual] - 1;
       } else {
         netReturn -= 1;
       }
@@ -231,7 +169,6 @@ export const calculateBettingSignal = (
   let activePrediction = prediction;
   let activeConfig = config;
 
-  // 1. Auto Mode Switching
   activeMode = selectActivePredictionMode(history, config);
   if (activeMode !== config.predictionMode) {
     activeConfig = { ...config, predictionMode: activeMode };
@@ -262,22 +199,6 @@ export const calculateBettingSignal = (
   };
 };
 
-const targetMatchesOutcome = (target: BettingSignal['target'], actual: Outcome): boolean => {
-  if (!target) {
-    return false;
-  }
-  if (target === 'x10-x15') {
-    return actual === 'x10' || actual === 'x15';
-  }
-  if (target === 'x25' || target === 'x45') {
-    return actual === target;
-  }
-  if (target === 'x5') {
-    return isX5Outcome(actual);
-  }
-  return actual === target;
-};
-
 export const calculateBacktest = (
   history: Outcome[],
   config: Config
@@ -304,25 +225,27 @@ export const calculateBacktest = (
     summary.totalEvaluated++;
     summary.actionCounts[signal.stakeLevel]++;
 
-    if (signal.action === 'skip' || !signal.target) {
+    const targets = signal.targets ?? (signal.target && ALL_OUTCOMES.includes(signal.target as Outcome) ? [signal.target as Outcome] : []);
+    if (signal.action === 'skip' || targets.length === 0) {
       summary.skipped++;
       continue;
     }
 
-    const target = signal.target;
-    const targetStats = summary.hitsByTarget[target] ?? { hits: 0, attempts: 0, hitRate: 0 };
-    targetStats.attempts++;
+    for (const target of targets) {
+      const targetStats = summary.hitsByTarget[target] ?? { hits: 0, attempts: 0, hitRate: 0 };
+      targetStats.attempts++;
 
-    const hit = targetMatchesOutcome(target, actual);
-    if (hit) {
-      targetStats.hits++;
-      summary.estimatedReturn += MULTIPLIERS[actual] - 1;
-    } else {
-      summary.estimatedReturn -= 1;
+      const hit = actual === target;
+      if (hit) {
+        targetStats.hits++;
+        summary.estimatedReturn += MULTIPLIERS[actual] - 1;
+      } else {
+        summary.estimatedReturn -= 1;
+      }
+
+      targetStats.hitRate = Math.round((targetStats.hits / targetStats.attempts) * 10000) / 100;
+      summary.hitsByTarget[target] = targetStats;
     }
-
-    targetStats.hitRate = Math.round((targetStats.hits / targetStats.attempts) * 10000) / 100;
-    summary.hitsByTarget[target] = targetStats;
   }
 
   summary.estimatedReturn = Math.round(summary.estimatedReturn * 100) / 100;

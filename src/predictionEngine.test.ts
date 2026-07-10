@@ -189,21 +189,31 @@ describe('Prediction Engine', () => {
     expect(result.directional?.minSteps).toBe(3);
   });
 
-  it('should detect cold and hot regimes based on last 15 spins', () => {
-    // 1. Cold regime: last 15 spins have <= 1 large outcome
+  it('should detect cold and hot regimes based on configurable recent large outcome count', () => {
     const coldHistory: Outcome[] = Array(15).fill('x5_1');
     const resultCold = calculatePrediction(coldHistory, DEFAULT_CONFIG);
     expect(resultCold.regime).toBe('cold');
     expect(resultCold.largeCount).toBe(0);
 
-    // 2. Hot regime: last 15 spins have >= 2 large outcomes (e.g. x10, x25)
     const hotHistory: Outcome[] = [
-      ...Array(13).fill('x5_1'),
-      'x10', 'x25'
+      ...Array(11).fill('x5_1'),
+      'x10', 'x25', 'x15', 'x45'
     ];
     const resultHot = calculatePrediction(hotHistory, DEFAULT_CONFIG);
     expect(resultHot.regime).toBe('hot');
-    expect(resultHot.largeCount).toBe(2);
+    expect(resultHot.largeCount).toBe(4);
+
+    const customHotHistory: Outcome[] = [
+      ...Array(7).fill('x5_1'),
+      'x10', 'x25', 'x15'
+    ];
+    const customHot = calculatePrediction(customHotHistory, {
+      ...DEFAULT_CONFIG,
+      hotRegimeWindow: 10,
+      hotRegimeThreshold: 3,
+    });
+    expect(customHot.regime).toBe('hot');
+    expect(customHot.largeCount).toBe(3);
   });
 
   it('should damp or boost large outcomes when useRegimeAdjuster is enabled', () => {

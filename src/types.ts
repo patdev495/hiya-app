@@ -15,6 +15,8 @@ export interface Config {
   useAdaptiveSafety?: boolean;
   useAutoModeSwitch?: boolean;
   autoModeWindow?: number;
+  hotRegimeWindow?: number;
+  hotRegimeThreshold?: number;
 }
 
 export interface PredictionResult {
@@ -33,6 +35,8 @@ export interface PredictionResult {
   };
   regime?: 'hot' | 'cold';
   largeCount?: number;
+  regimeWindow?: number;
+  regimeThreshold?: number;
 }
 
 export interface HistoryItem {
@@ -56,6 +60,7 @@ export interface BettingCandidate {
 export interface BettingSignal {
   action: BettingAction;
   target: Outcome | TargetTier | null;
+  targets?: Outcome[];
   stakeLevel: StakeLevel;
   risk: RiskLevel;
   candidates: BettingCandidate[];

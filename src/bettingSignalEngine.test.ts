@@ -19,15 +19,15 @@ const predict = (history: Outcome[], config: Config = DEFAULT_CONFIG) =>
   calculatePrediction(history, config);
 
 describe('Betting Signal Engine', () => {
-  it('recommends skipping when no outcome clears break-even plus safety margin', () => {
+  it('non-hot regime still recommends the two highest x5 slots when no large outcome qualifies', () => {
     const prediction = predict([]);
 
     const signal = calculateBettingSignal([], prediction, DEFAULT_CONFIG);
 
-    expect(signal.action).toBe('skip');
-    expect(signal.target).toBeNull();
-    expect(signal.stakeLevel).toBe('skip');
-    expect(signal.reasons).toContain('No outcome clears break-even plus safety margin.');
+    expect(signal.action).toBe('normal');
+    expect(signal.targets).toHaveLength(2);
+    expect(signal.targets?.every(target => target.startsWith('x5_'))).toBe(true);
+    expect(signal.reasons).toContain('Non-hot regime: always bet top two x5 slots.');
   });
 
   it('keeps an outcome playable when it clears break-even plus safety margin', () => {
@@ -44,27 +44,27 @@ describe('Betting Signal Engine', () => {
     expect(signal.candidates.some(candidate => candidate.edge > 0)).toBe(true);
   });
 
-  it('maps playable outcomes into the balanced target tiers', () => {
+  it('maps playable outcomes into exact multi-target recommendations', () => {
     const hotX10History: Outcome[] = Array(12).fill(['x10', 'x15']).flat() as Outcome[];
     const x10Signal = calculateBettingSignal(hotX10History, predict(hotX10History), DEFAULT_CONFIG);
-    expect(x10Signal.target).toBe('x10-x15');
+    expect(x10Signal.targets?.some(target => target === 'x10' || target === 'x15')).toBe(true);
     expect(x10Signal.action).toBe('normal');
     expect(x10Signal.stakeLevel).toBe('normal');
 
     const x25History: Outcome[] = Array(12).fill(['x25', 'x10']).flat() as Outcome[];
     const x25Signal = calculateBettingSignal(x25History, predict(x25History), DEFAULT_CONFIG);
-    expect(x25Signal.target).toBe('x25');
-    expect(x25Signal.action).toBe('probe');
-    expect(x25Signal.stakeLevel).toBe('probe');
+    expect(x25Signal.targets).toContain('x25');
+    expect(x25Signal.action).toBe('normal');
+    expect(x25Signal.stakeLevel).toBe('normal');
 
     const x45History: Outcome[] = Array(12).fill(['x45', 'x10']).flat() as Outcome[];
     const x45Signal = calculateBettingSignal(x45History, predict(x45History), DEFAULT_CONFIG);
-    expect(x45Signal.target).toBe('x45');
-    expect(x45Signal.action).toBe('tiny-shot');
-    expect(x45Signal.stakeLevel).toBe('tiny-shot');
+    expect(x45Signal.targets).toContain('x45');
+    expect(x45Signal.action).toBe('normal');
+    expect(x45Signal.stakeLevel).toBe('normal');
   });
 
-  it('does not recommend x5 solely because generic x5 outcomes are frequent', () => {
+  it('in non-hot regime recommends the top two x5 slots even when generic x5 outcomes are frequent', () => {
     const history: Outcome[] = [
       'x5_1', 'x5_2', 'x5_3', 'x5_4',
       'x5_2', 'x5_3', 'x5_4', 'x5_1',
@@ -74,11 +74,12 @@ describe('Betting Signal Engine', () => {
 
     const signal = calculateBettingSignal(history, predict(history), DEFAULT_CONFIG);
 
-    expect(signal.target).toBeNull();
-    expect(signal.action).toBe('skip');
+    expect(signal.action).toBe('normal');
+    expect(signal.targets).toHaveLength(2);
+    expect(signal.targets?.every(target => target.startsWith('x5_'))).toBe(true);
   });
 
-  it('scores stronger recommendations when regime and transition evidence align', () => {
+  it('uses target count as agreement score for multi-target recommendations', () => {
     const history: Outcome[] = [];
     for (let i = 0; i < 8; i++) {
       history.push('x5_1', 'x10', 'x15');
@@ -88,12 +89,11 @@ describe('Betting Signal Engine', () => {
     const signal = calculateBettingSignal(history, predict(history), DEFAULT_CONFIG);
 
     expect(signal.action).toBe('normal');
-    expect(signal.agreementScore).toBeGreaterThanOrEqual(3);
-    expect(signal.reasons).toContain('Hot regime supports large-outcome targets.');
-    expect(signal.reasons).toContain('Transition evidence has medium or high support.');
+    expect(signal.agreementScore).toBe(signal.targets?.length);
+    expect(signal.reasons.some(reason => reason.startsWith('Bet targets:'))).toBe(true);
   });
 
-  it('downgrades playable outcomes when signal evidence conflicts', () => {
+  it('does not downgrade hot regime multi-target recommendations for old conflict scoring', () => {
     const hotHistory: Outcome[] = Array(12).fill(['x10', 'x15']).flat() as Outcome[];
     const prediction = {
       ...predict(hotHistory),
@@ -103,12 +103,12 @@ describe('Betting Signal Engine', () => {
 
     const signal = calculateBettingSignal(hotHistory, prediction, DEFAULT_CONFIG);
 
-    expect(signal.action).toBe('probe');
-    expect(signal.stakeLevel).toBe('probe');
-    expect(signal.reasons).toContain('Cold regime conflicts with large-outcome targets.');
+    expect(signal.action).toBe('normal');
+    expect(signal.stakeLevel).toBe('normal');
+    expect(signal.targets?.some(target => target === 'x10' || target === 'x15')).toBe(true);
   });
 
-  it('allows an exact x5 slot only when exact-slot evidence is strong', () => {
+  it('allows x5 slots through regime rules instead of old exact-evidence gate', () => {
     const history: Outcome[] = [];
     for (let i = 0; i < 8; i++) {
       history.push('x10', 'x5_3');
@@ -118,9 +118,9 @@ describe('Betting Signal Engine', () => {
     const signal = calculateBettingSignal(history, predict(history), DEFAULT_CONFIG);
 
     expect(signal.action).toBe('normal');
-    expect(signal.target).toBe('x5_3');
+    expect(signal.targets).toContain('x5_3');
     expect(signal.stakeLevel).toBe('normal');
-    expect(signal.reasons).toContain('Exact x5 slot has strong supported evidence.');
+    expect(signal.reasons).toContain('Hot regime: bet x5 slots only above 30%.');
   });
 
   it('backtests recorded history using the same live recommendation engine', () => {
@@ -134,14 +134,89 @@ describe('Betting Signal Engine', () => {
 
     expect(summary.totalEvaluated).toBeGreaterThan(0);
     expect(summary.actionCounts.normal).toBeGreaterThan(0);
-    expect(summary.hitsByTarget['x10-x15']?.attempts).toBeGreaterThan(0);
+    expect(
+      (summary.hitsByTarget.x10?.attempts ?? 0) + (summary.hitsByTarget.x15?.attempts ?? 0)
+    ).toBeGreaterThan(0);
     expect(typeof summary.estimatedReturn).toBe('number');
   });
 
-  it('supports adaptive safety margin by scaling up when drift is detected', () => {
-    // Generate a history of 30 spins.
-    // The first 15 spins are x10.
-    // The next 15 spins alternate between non-x10/non-x15 outcomes, causing the model (which still predicts x10) to fail consistently.
+  it('in non-hot regime bets the top two x5 slots and large outcomes at three times break-even', () => {
+    const history: Outcome[] = [
+      'x5_1', 'x5_2', 'x5_1', 'x5_2', 'x5_1',
+      'x5_2', 'x5_3', 'x5_4', 'x5_1', 'x5_2',
+      'x5_1', 'x5_2', 'x5_3', 'x5_4', 'x5_1',
+    ];
+
+    const signal = calculateBettingSignal(history, predict(history), {
+      ...DEFAULT_CONFIG,
+      priorStrength: 0,
+      useRegimeAdjuster: false,
+    });
+
+    expect(signal.targets).toHaveLength(2);
+    expect(signal.targets).toEqual(expect.arrayContaining(['x5_1', 'x5_2']));
+    expect(signal.reasons).toContain('Non-hot regime: always bet top two x5 slots.');
+  });
+
+  it('in hot regime bets all large outcomes at two times break-even and only x5 slots above 30%', () => {
+    const history: Outcome[] = [
+      'x10', 'x15', 'x10', 'x15', 'x10',
+      'x15', 'x25', 'x45', 'x10', 'x15',
+      'x10', 'x15', 'x10', 'x15', 'x10',
+    ];
+
+    const signal = calculateBettingSignal(history, predict(history), {
+      ...DEFAULT_CONFIG,
+      priorStrength: 0,
+      useRegimeAdjuster: false,
+    });
+
+    expect(signal.targets).toContain('x15');
+    expect(signal.targets).not.toContain('x5_1');
+    expect(signal.reasons).toContain('Hot regime: bet large outcomes above 2x break-even.');
+  });
+
+  it('uses configurable hot regime window and threshold for multi-target rules', () => {
+    const history: Outcome[] = [
+      ...Array(7).fill('x5_1'),
+      'x10', 'x25', 'x15',
+    ];
+
+    const signal = calculateBettingSignal(history, predict(history, {
+      ...DEFAULT_CONFIG,
+      hotRegimeWindow: 10,
+      hotRegimeThreshold: 3,
+    }), {
+      ...DEFAULT_CONFIG,
+      priorStrength: 0,
+      useRegimeAdjuster: false,
+      hotRegimeWindow: 10,
+      hotRegimeThreshold: 3,
+    });
+
+    expect(signal.reasons).toContain('Hot regime: bet large outcomes above 2x break-even.');
+  });
+
+  it('backtest charges one stake per selected target in the same turn', () => {
+    const history: Outcome[] = [
+      'x5_1', 'x5_2', 'x5_1', 'x5_2', 'x5_1',
+      'x5_2', 'x5_1', 'x5_2', 'x5_1', 'x5_2',
+      'x5_1', 'x5_2', 'x5_1', 'x5_2', 'x5_1',
+      'x5_1',
+    ];
+
+    const summary = calculateBacktest(history, {
+      ...DEFAULT_CONFIG,
+      priorStrength: 0,
+      useRegimeAdjuster: false,
+    });
+
+    expect(summary.hitsByTarget.x5_1?.attempts).toBeGreaterThan(0);
+    expect(summary.hitsByTarget.x5_2?.attempts).toBeGreaterThan(0);
+    expect(summary.estimatedReturn).toBeGreaterThanOrEqual(3);
+  });
+
+  it('keeps adaptive safety at the default margin when multi-target rules do not detect drift', () => {
     const history: Outcome[] = [
       ...Array(15).fill('x10'),
       'x5_1', 'x5_2', 'x5_3', 'x5_4', 'x25', 'x45',
@@ -157,8 +232,8 @@ describe('Betting Signal Engine', () => {
     const prediction = calculatePrediction(history, config);
     const signal = calculateBettingSignal(history, prediction, config);
 
-    expect(signal.isDriftDetected).toBe(true);
-    expect(signal.adaptiveSafetyMargin).toBe(2.0);
+    expect(signal.isDriftDetected).toBe(false);
+    expect(signal.adaptiveSafetyMargin).toBe(0.5);
   });
 
   it('supports auto mode switching to select the mode with highest recent backtest return', () => {
@@ -227,6 +302,7 @@ describe('Betting Signal Engine', () => {
       ...DEFAULT_CONFIG,
       useAutoModeSwitch: true,
       predictionMode: 'decay',
+      autoModeWindow: 30,
     };
 
     const predDefault = calculatePrediction(history, configDefault);

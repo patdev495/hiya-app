@@ -373,10 +373,12 @@ export const calculatePrediction = (
   }
 
   // --- REGIME ESTIMATOR & ADJUSTER ---
-  const last15 = activeHistory.slice(-15);
+  const regimeWindow = config.hotRegimeWindow || 15;
+  const regimeThreshold = config.hotRegimeThreshold || 4;
+  const recentRegimeHistory = activeHistory.slice(-regimeWindow);
   const largeOutcomes = ['x10', 'x15', 'x25', 'x45'];
-  const largeCount = last15.filter(o => largeOutcomes.includes(o)).length;
-  const regime = largeCount <= 1 ? 'cold' : 'hot';
+  const largeCount = recentRegimeHistory.filter(o => largeOutcomes.includes(o)).length;
+  const regime = largeCount >= regimeThreshold ? 'hot' : 'cold';
 
   let pAdjusted = { ...pRawOutcomes };
   if (config.useRegimeAdjuster) {
@@ -440,6 +442,8 @@ export const calculatePrediction = (
     },
     directional,
     regime,
-    largeCount
+    largeCount,
+    regimeWindow,
+    regimeThreshold
   };
 };

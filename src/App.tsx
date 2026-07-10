@@ -3,14 +3,14 @@ import { calculateDeckWindowStats, calculatePrediction, ALL_OUTCOMES, MULTIPLIER
 import { calculateBacktest, calculateBettingSignal, selectActivePredictionMode } from './bettingSignalEngine';
 import type { Outcome, Config, HistoryItem, PredictionMode } from './types';
 import { translations, type Language } from './locales';
-import { 
-  History, 
-  Trash2, 
-  Edit2, 
-  RotateCcw, 
-  Info, 
-  TrendingUp, 
-  Gauge, 
+import {
+  History,
+  Trash2,
+  Edit2,
+  RotateCcw,
+  Info,
+  TrendingUp,
+  Gauge,
   Sliders,
   Check,
   X,
@@ -34,6 +34,13 @@ const getDisplacementLabel = (shift: number, lang: Language): string => {
   return '';
 };
 
+const GRID_ORDERED_OUTCOMES: Outcome[] = [
+  'x5_1', 'x10',
+  'x5_2', 'x15',
+  'x5_3', 'x25',
+  'x5_4', 'x45'
+];
+
 const DEFAULT_CONFIG: Config = {
   historyWindow: 100,
   maxOrder: 2,
@@ -46,7 +53,9 @@ const DEFAULT_CONFIG: Config = {
   deckSize: 1000,
   useAdaptiveSafety: true,
   useAutoModeSwitch: true,
-  autoModeWindow: 30,
+  autoModeWindow: 3,
+  hotRegimeWindow: 15,
+  hotRegimeThreshold: 4,
 };
 
 // Color mapping for outcomes to make the UI look rich and easy to scan
@@ -83,15 +92,22 @@ const formatSignalTarget = (target: string | null): string => {
   return target ? target.replace('_', ' ').toUpperCase() : 'SKIP';
 };
 
+const formatSignalTargets = (targets: string[] | undefined, fallback: string | null): string => {
+  const activeTargets = targets && targets.length > 0 ? targets : (fallback ? [fallback] : []);
+  return activeTargets.length > 0
+    ? activeTargets.map((target) => formatSignalTarget(target)).join(' + ')
+    : 'SKIP';
+};
+
 const translateReason = (reason: string, lang: Language): string => {
   if (lang === 'en') return reason;
-  
+
   // Match outcome clear message (e.g. x5_3 clears break-even plus safety margin.)
   const outcomeClearMatch = reason.match(/^(\w+) clears break-even plus safety margin\.$/);
   if (outcomeClearMatch) {
     return `${outcomeClearMatch[1].toUpperCase()} vượt điểm hòa vốn + biên an toàn.`;
   }
-  
+
   const dict: Record<string, string> = {
     'Exact x5 slot has strong supported evidence.': 'Ô x5 cụ thể có bằng chứng hỗ trợ mạnh mẽ.',
     'No outcome clears break-even plus safety margin.': 'Không có ô nào vượt điểm hòa vốn + biên an toàn.',
@@ -100,7 +116,7 @@ const translateReason = (reason: string, lang: Language): string => {
     'Cold regime conflicts with large-outcome targets.': 'Chế độ Cold xung đột với mục tiêu ô nhân lớn.',
     'Transition evidence has medium or high support.': 'Bằng chứng chuyển cảnh có hỗ trợ trung bình hoặc cao.',
   };
-  
+
   return dict[reason] || reason;
 };
 
@@ -117,6 +133,7 @@ export default function App() {
   const [editingOutcome, setEditingOutcome] = useState<Outcome | ''>('');
   const [language, setLanguage] = useState<Language>('vi');
   const [previewMode, setPreviewMode] = useState<PredictionMode | null>(null);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   useEffect(() => {
     const storedLang = localStorage.getItem('wheel_prediction_lang');
@@ -167,7 +184,13 @@ export default function App() {
           parsed.useAutoModeSwitch = true;
         }
         if (parsed.autoModeWindow === undefined) {
-          parsed.autoModeWindow = 30;
+          parsed.autoModeWindow = 3;
+        }
+        if (parsed.hotRegimeWindow === undefined) {
+          parsed.hotRegimeWindow = 15;
+        }
+        if (parsed.hotRegimeThreshold === undefined) {
+          parsed.hotRegimeThreshold = 4;
         }
         setConfig(parsed);
       }
@@ -205,7 +228,7 @@ export default function App() {
 
   const handleSaveEdit = (id: string) => {
     if (!editingOutcome) return;
-    const newHistory = history.map(item => 
+    const newHistory = history.map(item =>
       item.id === id ? { ...item, outcome: editingOutcome } : item
     );
     updateHistoryState(newHistory);
@@ -241,12 +264,18 @@ export default function App() {
   const historyOutcomes = history.map(h => h.outcome);
 
   // Calculate simulated returns for each mode over the configured autoModeWindow
-  const autoWindow = config.autoModeWindow || 30;
+  const autoWindow = config.autoModeWindow || 3;
   const autoHistory = historyOutcomes.slice(-autoWindow);
+  const previousAutoHistory = historyOutcomes.slice(0, -1).slice(-autoWindow);
   const modeReturns = {
     absolute: calculateBacktest(autoHistory, { ...config, predictionMode: 'absolute', useAutoModeSwitch: false, useAdaptiveSafety: false }).estimatedReturn,
     relative: calculateBacktest(autoHistory, { ...config, predictionMode: 'relative', useAutoModeSwitch: false, useAdaptiveSafety: false }).estimatedReturn,
     decay: calculateBacktest(autoHistory, { ...config, predictionMode: 'decay', useAutoModeSwitch: false, useAdaptiveSafety: false }).estimatedReturn,
+  };
+  const previousModeReturns = {
+    absolute: calculateBacktest(previousAutoHistory, { ...config, predictionMode: 'absolute', useAutoModeSwitch: false, useAdaptiveSafety: false }).estimatedReturn,
+    relative: calculateBacktest(previousAutoHistory, { ...config, predictionMode: 'relative', useAutoModeSwitch: false, useAdaptiveSafety: false }).estimatedReturn,
+    decay: calculateBacktest(previousAutoHistory, { ...config, predictionMode: 'decay', useAutoModeSwitch: false, useAdaptiveSafety: false }).estimatedReturn,
   };
 
   // If previewMode is active, override config for prediction and betting signal calculations.
@@ -263,10 +292,39 @@ export default function App() {
   const activeModeToShow = previewMode || bettingSignal.activeMode || selectedPredictionMode;
   const backtestSummary = calculateBacktest(historyOutcomes, config);
   const deckWindowStats = calculateDeckWindowStats(historyOutcomes, config.deckSize);
+  const regimeWindow = config.hotRegimeWindow || 15;
+  const regimeThreshold = config.hotRegimeThreshold || 4;
+  const regimeLargeCount = historyOutcomes
+    .slice(-regimeWindow)
+    .filter((outcome) => ['x10', 'x15', 'x25', 'x45'].includes(outcome)).length;
+  const isHotRegime = regimeLargeCount >= regimeThreshold;
 
   // Split history into active (within window) and older
   const activeCount = prediction.activeHistory.length;
   const totalCount = history.length;
+  const predictionModes: PredictionMode[] = ['absolute', 'relative', 'decay'];
+  const bestModeReturn = Math.max(...predictionModes.map((mode) => modeReturns[mode]));
+  const autoSelectedMode = bettingSignal.activeMode || config.predictionMode;
+  const modePredictions = Object.fromEntries(
+    predictionModes.map((mode) => [
+      mode,
+      calculatePrediction(historyOutcomes, { ...config, predictionMode: mode, useAutoModeSwitch: false }),
+    ])
+  ) as Record<PredictionMode, typeof prediction>;
+  const modeSignals = Object.fromEntries(
+    predictionModes.map((mode) => [
+      mode,
+      calculateBettingSignal(
+        historyOutcomes,
+        modePredictions[mode],
+        { ...config, predictionMode: mode, useAutoModeSwitch: false }
+      ),
+    ])
+  ) as Record<PredictionMode, typeof bettingSignal>;
+
+  const getModeLabel = (mode: PredictionMode) => {
+    return t(`mode${mode.charAt(0).toUpperCase()}${mode.slice(1)}` as any);
+  };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-indigo-500/30 selection:text-indigo-200 antialiased pb-12">
@@ -276,7 +334,7 @@ export default function App() {
 
       {/* Main Container */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
-        
+
         {/* Header */}
         <header className="flex flex-col md:flex-row md:items-center md:justify-between border-b border-slate-800/80 pb-6 mb-8 gap-4">
           <div>
@@ -291,8 +349,19 @@ export default function App() {
             <p className="text-slate-400 text-sm mt-1">
               {t('subtitle')}
             </p>
+            <div
+              data-layout="hot-regime-header"
+              className={`mt-3 inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-bold ${isHotRegime
+                  ? 'border-rose-500/40 bg-rose-500/10 text-rose-300'
+                  : 'border-blue-500/40 bg-blue-500/10 text-blue-300'
+                }`}
+            >
+              <span>{isHotRegime ? t('hotRegime') : t('coldRegime')}</span>
+              <span className="font-mono">{regimeLargeCount}/{regimeWindow}</span>
+              <span className="text-slate-500">≥ {regimeThreshold}</span>
+            </div>
           </div>
-          
+
           <div className="flex items-center gap-3">
             {/* Language Selector */}
             <div className="flex items-center gap-1.5 border-r border-slate-800 pr-3 mr-1">
@@ -325,22 +394,320 @@ export default function App() {
               <RotateCcw className="w-3.5 h-3.5" />
               {t('resetApp')}
             </button>
+            <button
+              data-layout="settings-trigger"
+              onClick={() => setIsSettingsOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-500 border border-indigo-500 rounded-lg transition-colors cursor-pointer"
+            >
+              <Sliders className="w-3.5 h-3.5" />
+              {t('modelConfig')}
+            </button>
           </div>
         </header>
 
+        <div data-layout="top-ops-panel" className="mb-8 grid grid-cols-1 xl:grid-cols-[minmax(0,1.35fr)_minmax(360px,0.65fr)] gap-6">
+          <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800/80 rounded-2xl p-5">
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <div>
+                <h3 className="text-lg font-bold text-white">{t('predMode')}</h3>
+                <p className="text-xs text-slate-500 mt-1">{t('activeModeLabel')}: <span className="text-indigo-300 font-bold uppercase">{getModeLabel(activeModeToShow)}</span></p>
+              </div>
+              {previewMode && (
+                <button
+                  onClick={() => setPreviewMode(null)}
+                  className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-bold text-amber-300 cursor-pointer hover:bg-amber-500/20"
+                >
+                  PREVIEW OFF
+                </button>
+              )}
+            </div>
+
+            <div data-layout="mode-probability-grid" className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+              {predictionModes.map((mode) => {
+                const modeReturn = modeReturns[mode];
+                const modeReturnDelta = Math.round((modeReturn - previousModeReturns[mode]) * 100) / 100;
+                const modePrediction = modePredictions[mode];
+                const modeSignal = modeSignals[mode];
+                const isPreview = previewMode === mode;
+                const isAutoSelected = previewMode === null && config.useAutoModeSwitch && autoSelectedMode === mode;
+                const isManualSelected = !config.useAutoModeSwitch && config.predictionMode === mode;
+                const isBestMode = modeReturn === bestModeReturn;
+                const returnTone = modeReturn > 0
+                  ? 'text-emerald-400'
+                  : modeReturn < 0
+                    ? 'text-rose-400'
+                    : 'text-slate-400';
+                const deltaTone = modeReturnDelta > 0
+                  ? 'text-emerald-400'
+                  : modeReturnDelta < 0
+                    ? 'text-rose-400'
+                    : 'text-slate-400';
+                const stateLabel = isPreview
+                  ? 'PREVIEW'
+                  : isAutoSelected
+                    ? 'AUTO'
+                    : isManualSelected
+                      ? 'ACTIVE'
+                      : isBestMode
+                        ? 'BEST'
+                        : '';
+
+                return (
+                  <button
+                    key={mode}
+                    onClick={() => {
+                      if (config.useAutoModeSwitch) {
+                        setPreviewMode(previewMode === mode ? null : mode);
+                      } else {
+                        updateConfigState({ ...config, predictionMode: mode });
+                      }
+                    }}
+                    className={`rounded-xl border p-3 text-left transition-all duration-200 cursor-pointer ${isPreview
+                        ? 'border-amber-500 bg-amber-500/10 shadow-[0_0_18px_rgba(245,158,11,0.18)]'
+                        : isAutoSelected || isManualSelected
+                          ? 'border-indigo-500 bg-indigo-600/15 shadow-[0_0_18px_rgba(99,102,241,0.16)]'
+                          : isBestMode
+                            ? 'border-emerald-500/60 bg-emerald-500/10'
+                            : 'border-slate-800 bg-slate-950/50 hover:border-slate-700 hover:bg-slate-900'
+                      }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-black text-white">{getModeLabel(mode)}</div>
+                        <div className={`mt-1 font-mono text-xl font-black ${returnTone}`}>
+                          {modeReturn > 0 ? '+' : ''}{modeReturn}
+                          <span className={`ml-2 text-sm ${deltaTone}`}>({modeReturnDelta > 0 ? '+' : ''}{modeReturnDelta})</span>
+                        </div>
+                      </div>
+                      {stateLabel && (
+                        <span className={`shrink-0 rounded-md border px-2 py-0.5 text-[10px] font-black tracking-wider ${isPreview
+                            ? 'border-amber-500/50 bg-amber-500/10 text-amber-300'
+                            : isAutoSelected || isManualSelected
+                              ? 'border-indigo-500/50 bg-indigo-500/10 text-indigo-300'
+                              : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+                          }`}>
+                          {stateLabel}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-2 gap-1.5">
+                      {GRID_ORDERED_OUTCOMES.map((outcome) => {
+                        const color = OUTCOME_COLORS[outcome];
+                        const isRecommendedTarget = modeSignal.targets?.includes(outcome) ?? false;
+                        return (
+                          <div key={outcome} className={`rounded-lg border px-2 py-1.5 ${isRecommendedTarget ? 'border-indigo-500/50 bg-indigo-500/10' : 'border-slate-800 bg-slate-950/50'}`}>
+                            <div className={`text-[10px] font-mono font-bold ${color.text}`}>{outcome.toUpperCase()}</div>
+                            <div className="text-sm font-black text-white">{modePrediction.probabilities[outcome]}%</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mt-4 rounded-xl border border-slate-800 bg-slate-950/50 p-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-bold border ${getSignalTone(bettingSignal.action)}`}>
+                  {t(`signalAction_${bettingSignal.action}` as Exclude<keyof typeof translations['en'], 'displacementLabels'>)}
+                </span>
+                <span className="font-mono text-xl font-black text-white">{formatSignalTargets(bettingSignal.targets, bettingSignal.target)}</span>
+                <span className="text-xs text-slate-500">{t('stakeLevel')}: <strong className="text-slate-300 uppercase">{bettingSignal.stakeLevel}</strong></span>
+              </div>
+              <div className="mt-3 space-y-1">
+                {bettingSignal.reasons.slice(0, 3).map((reason) => (
+                  <div key={reason} className="text-[11px] text-slate-400 flex gap-1.5">
+                    <span className="text-indigo-400">•</span>
+                    <span>{translateReason(reason, language)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div data-layout="record-outcome-panel" className="bg-slate-900/60 backdrop-blur-xl border border-slate-800/80 rounded-2xl p-5 relative">
+              <h3 className="text-lg font-bold text-white mb-3">{t('recordOutcome')}</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {ALL_OUTCOMES.map((o) => {
+                  const color = OUTCOME_COLORS[o];
+                  const reverseIdx = [...historyOutcomes].reverse().indexOf(o);
+                  const drySpins = reverseIdx === -1 ? null : reverseIdx;
+                  return (
+                    <button
+                      key={o}
+                      onClick={() => handleAddOutcome(o)}
+                      className={`h-16 px-3 border rounded-xl flex flex-col justify-center items-center text-center transition-all duration-200 active:scale-95 cursor-pointer bg-slate-950/60 ${color.border} hover:bg-slate-800 hover:border-slate-600 group relative overflow-hidden`}
+                    >
+                      <span className="absolute top-1 right-1.5 text-[9px] font-mono text-slate-500">
+                        {drySpins !== null ? `-${drySpins}` : '---'}
+                      </span>
+                      <span className={`text-xs font-black tracking-wide ${color.text}`}>{o.toUpperCase()}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div data-layout="top-history-panel" className="bg-slate-900/60 backdrop-blur-xl border border-slate-800/80 rounded-2xl p-5 flex flex-col max-h-[420px]">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  <History className="w-4 h-4 text-indigo-400" />
+                  {t('spinLog')}
+                </h3>
+                <span className="text-xs text-slate-500 font-semibold font-mono">{t('logActive')}: {activeCount}/{totalCount}</span>
+              </div>
+              {history.length === 0 ? (
+                <div className="flex-1 py-10 flex flex-col items-center justify-center border border-dashed border-slate-800 rounded-xl">
+                  <History className="w-8 h-8 text-slate-700 mb-2" />
+                  <p className="text-sm text-slate-500">{t('noHistory')}</p>
+                </div>
+              ) : (
+                <div className="flex-1 overflow-y-auto pr-1 space-y-2">
+                  {[...history].reverse().map((item, reverseIdx) => {
+                    const originalIdx = history.length - 1 - reverseIdx;
+                    const isActive = originalIdx >= history.length - config.historyWindow;
+                    const color = OUTCOME_COLORS[item.outcome];
+                    return (
+                      <div key={item.id} className={`flex items-center justify-between p-2.5 rounded-lg border transition-all ${isActive ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-950/20 border-slate-900 opacity-40'}`}>
+                        <span className="text-xs text-slate-600 font-mono font-semibold">#{originalIdx + 1}</span>
+                        <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded ${color.bg} ${color.text} border ${color.border}`}>{item.outcome.toUpperCase()}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div
+          data-layout="mode-performance-bar"
+          className="hidden"
+        >
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            {predictionModes.map((mode) => {
+              const modeReturn = modeReturns[mode];
+              const isPreview = previewMode === mode;
+              const isAutoSelected = previewMode === null && config.useAutoModeSwitch && autoSelectedMode === mode;
+              const isManualSelected = !config.useAutoModeSwitch && config.predictionMode === mode;
+              const isBestMode = modeReturn === bestModeReturn;
+              const returnTone = modeReturn > 0
+                ? 'text-emerald-400'
+                : modeReturn < 0
+                  ? 'text-rose-400'
+                  : 'text-slate-400';
+              const stateLabel = isPreview
+                ? 'PREVIEW'
+                : isAutoSelected
+                  ? 'AUTO'
+                  : isManualSelected
+                    ? 'ACTIVE'
+                    : isBestMode
+                      ? 'BEST'
+                      : '';
+
+              return (
+                <button
+                  key={mode}
+                  onClick={() => {
+                    if (config.useAutoModeSwitch) {
+                      setPreviewMode(previewMode === mode ? null : mode);
+                    } else {
+                      updateConfigState({ ...config, predictionMode: mode });
+                    }
+                  }}
+                  className={`min-h-20 rounded-xl border px-4 py-3 text-left transition-all duration-200 cursor-pointer ${isPreview
+                      ? 'border-amber-500 bg-amber-500/10 shadow-[0_0_18px_rgba(245,158,11,0.18)]'
+                      : isAutoSelected || isManualSelected
+                        ? 'border-indigo-500 bg-indigo-600/15 shadow-[0_0_18px_rgba(99,102,241,0.16)]'
+                        : isBestMode
+                          ? 'border-emerald-500/60 bg-emerald-500/10'
+                          : 'border-slate-800 bg-slate-900/70 hover:border-slate-700 hover:bg-slate-900'
+                    }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                        {t('predMode')}
+                      </div>
+                      <div className="mt-1 truncate text-sm font-black text-white">
+                        {getModeLabel(mode)}
+                      </div>
+                    </div>
+                    {stateLabel && (
+                      <span className={`shrink-0 rounded-md border px-2 py-0.5 text-[10px] font-black tracking-wider ${isPreview
+                          ? 'border-amber-500/50 bg-amber-500/10 text-amber-300'
+                          : isAutoSelected || isManualSelected
+                            ? 'border-indigo-500/50 bg-indigo-500/10 text-indigo-300'
+                            : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+                        }`}>
+                        {stateLabel}
+                      </span>
+                    )}
+                  </div>
+                  <div className={`mt-2 font-mono text-2xl font-black ${returnTone}`}>
+                    {modeReturn > 0 ? '+' : ''}{modeReturn}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div
+          data-layout="record-outcome-panel"
+          className="hidden"
+        >
+          <h3 className="text-lg font-bold text-white mb-2">{t('recordOutcome')}</h3>
+          <p className="text-slate-400 text-xs mb-6">
+            {t('recordDesc')}
+          </p>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-4">
+            {ALL_OUTCOMES.map((o) => {
+              const color = OUTCOME_COLORS[o];
+              const reverseIdx = [...historyOutcomes].reverse().indexOf(o);
+              const drySpins = reverseIdx === -1 ? null : reverseIdx;
+              return (
+                <button
+                  key={o}
+                  onClick={() => handleAddOutcome(o)}
+                  className={`h-20 px-4 border rounded-xl flex flex-col justify-center items-center text-center transition-all duration-200 active:scale-95 cursor-pointer bg-slate-950/60 ${color.border} hover:bg-slate-800 hover:border-slate-600 group relative overflow-hidden`}
+                >
+                  <span className="absolute top-1.5 right-2 text-[9px] font-mono text-slate-500">
+                    {drySpins !== null ? `-${drySpins}` : '---'}
+                  </span>
+                  <span className={`text-sm font-black tracking-wide ${color.text} group-hover:scale-105 transition-transform`}>
+                    {o.toUpperCase()}
+                  </span>
+                  <span className="text-[10px] text-slate-400 mt-0.5">
+                    {OUTCOME_LABELS[o]}
+                  </span>
+                  <span className="text-[9px] text-slate-500 mt-0.5 font-medium">
+                    {drySpins !== null ? (drySpins === 0 ? (language === 'vi' ? 'Vá»«a ra' : 'Just hit') : `${drySpins} ${language === 'vi' ? 'lÆ°á»£t chÆ°a ra' : 'spins dry'}`) : (language === 'vi' ? 'ChÆ°a ra' : 'Never hit')}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         {/* Dashboard Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          
+        <div data-layout="dashboard-grid" className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+
           {/* Column 1 & 2: Predictions & Recording */}
           <div className="lg:col-span-2 space-y-8">
-            
+
             {/* Top Highlight Panel (Top Outcome / Confidence) */}
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-              
+
               {/* Top Outcome Highlight */}
               <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800/80 rounded-2xl p-6 relative overflow-hidden flex flex-col justify-between">
                 <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-indigo-500/10 to-transparent rounded-full blur-2xl" />
-                
+
                 <div>
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-medium text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
@@ -349,7 +716,7 @@ export default function App() {
                     </span>
                     <span className="text-xs text-slate-500">{t('eventDriven')}</span>
                   </div>
-                  {activeConfigForPrediction.predictionMode === 'relative' && prediction.directional ? (
+                  {activeModeToShow === 'relative' && prediction.directional ? (
                     <>
                       <h2 className="text-4xl font-black text-white mt-4 tracking-tight">
                         {prediction.directional.direction === 'forward' && (
@@ -393,7 +760,7 @@ export default function App() {
                     </>
                   )}
                 </div>
-                
+
                 <div className="mt-6 flex items-start gap-2 text-xs text-slate-500 border-t border-slate-800/50 pt-3">
                   <Info className="w-4 h-4 text-slate-600 shrink-0 mt-0.5" />
                   <span>
@@ -413,7 +780,7 @@ export default function App() {
                     </span>
                     <span className="text-xs text-slate-500">{t('minSupport')} = {config.minSupport}</span>
                   </div>
-                  
+
                   <div className="mt-4 flex items-center gap-3">
                     {prediction.confidence === 'high' ? (
                       <span className="inline-flex items-center px-3.5 py-1.5 rounded-full text-sm font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
@@ -444,7 +811,7 @@ export default function App() {
                           const color = OUTCOME_COLORS[c];
                           const nextItem = prediction.evidence.activeContext[i + 1];
                           let shiftLabel = '';
-                          if (nextItem && activeConfigForPrediction.predictionMode === 'relative') {
+                          if (nextItem && activeModeToShow === 'relative') {
                             const idx1 = ALL_OUTCOMES.indexOf(c);
                             const idx2 = ALL_OUTCOMES.indexOf(nextItem);
                             const shift = (idx2 - idx1 + 8) % 8;
@@ -452,7 +819,7 @@ export default function App() {
                           }
                           return (
                             <div key={i} className="flex items-center gap-1.5">
-                              <span 
+                              <span
                                 className={`text-xs px-2 py-0.5 rounded font-mono font-bold ${color.bg} ${color.text} border ${color.border}`}
                               >
                                 {c.toUpperCase()}
@@ -511,14 +878,14 @@ export default function App() {
                         </span>
                       </div>
                     )}
-                    
+
                     <div className="text-xs text-slate-400 mt-2">
                       {t('largeSpins')} (≥ x10): <strong className="text-slate-200">{prediction.largeCount}/15</strong>
                     </div>
 
                     <div className="text-[10px] text-slate-500 mt-1">
-                      {prediction.regime === 'hot' 
-                        ? t('hotRegimeDesc') 
+                      {prediction.regime === 'hot'
+                        ? t('hotRegimeDesc')
                         : t('coldRegimeDesc')}
                     </div>
                   </div>
@@ -557,7 +924,7 @@ export default function App() {
                   </div>
 
                   <h2 className="text-3xl font-black text-white mt-4 tracking-tight">
-                    {formatSignalTarget(bettingSignal.target)}
+                    {formatSignalTargets(bettingSignal.targets, bettingSignal.target)}
                   </h2>
                   <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                     <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-2">
@@ -574,7 +941,7 @@ export default function App() {
                     <div className="flex justify-between">
                       <span>{t('activeSafetyMarginLabel')}:</span>
                       <span className="font-mono font-semibold text-slate-300">
-                        {bettingSignal.adaptiveSafetyMargin}% 
+                        {bettingSignal.adaptiveSafetyMargin}%
                         {bettingSignal.isDriftDetected && <span className="text-rose-400 ml-1">({t('adaptiveSafetyStatus')})</span>}
                       </span>
                     </div>
@@ -603,16 +970,16 @@ export default function App() {
               <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
                 {t('predictedDist')}
               </h3>
-              
+
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                 {ALL_OUTCOMES.map((o) => {
                   const prob = prediction.probabilities[o];
                   const color = OUTCOME_COLORS[o];
                   const isTop = o === prediction.topOutcome && prob > 0;
-                  
+
                   return (
-                    <div 
-                      key={o} 
+                    <div
+                      key={o}
                       className={`relative border rounded-xl p-4 transition-all duration-300 ${isTop ? 'bg-slate-800/40 border-indigo-500/50 shadow-[0_0_20px_rgba(99,102,241,0.15)] scale-[1.02]' : 'bg-slate-950/40 border-slate-800 hover:border-slate-700'}`}
                     >
                       <div className="flex items-center justify-between gap-2">
@@ -623,7 +990,7 @@ export default function App() {
                           1/{MULTIPLIERS[o]}
                         </span>
                       </div>
-                      
+
                       <div className="mt-4 flex items-baseline justify-between">
                         <span className="text-2xl font-black text-white">{prob}%</span>
                         {isTop && (
@@ -635,7 +1002,7 @@ export default function App() {
 
                       {/* Mini visual percentage progress bar */}
                       <div className="w-full bg-slate-800 h-1 rounded-full mt-3 overflow-hidden">
-                        <div 
+                        <div
                           className={`h-full ${color.accent} rounded-full transition-all duration-500`}
                           style={{ width: `${prob}%` }}
                         />
@@ -646,454 +1013,376 @@ export default function App() {
               </div>
             </div>
 
-            {/* Record Outcome Panel */}
-            <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800/80 rounded-2xl p-6 relative">
-              <h3 className="text-lg font-bold text-white mb-2">{t('recordOutcome')}</h3>
-              <p className="text-slate-400 text-xs mb-6">
-                {t('recordDesc')}
-              </p>
-              
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                {ALL_OUTCOMES.map((o) => {
-                  const color = OUTCOME_COLORS[o];
-                  const reverseIdx = [...historyOutcomes].reverse().indexOf(o);
-                  const drySpins = reverseIdx === -1 ? null : reverseIdx;
-                  return (
-                    <button
-                      key={o}
-                      onClick={() => handleAddOutcome(o)}
-                      className={`h-20 px-4 border rounded-xl flex flex-col justify-center items-center text-center transition-all duration-200 active:scale-95 cursor-pointer bg-slate-950/60 ${color.border} hover:bg-slate-800 hover:border-slate-600 group relative overflow-hidden`}
-                    >
-                      <span className="absolute top-1.5 right-2 text-[9px] font-mono text-slate-500">
-                        {drySpins !== null ? `-${drySpins}` : '—'}
-                      </span>
-                      <span className={`text-sm font-black tracking-wide ${color.text} group-hover:scale-105 transition-transform`}>
-                        {o.toUpperCase()}
-                      </span>
-                      <span className="text-[10px] text-slate-400 mt-0.5">
-                        {OUTCOME_LABELS[o]}
-                      </span>
-                      <span className="text-[9px] text-slate-500 mt-0.5 font-medium">
-                        {drySpins !== null ? (drySpins === 0 ? (language === 'vi' ? 'Vừa ra' : 'Just hit') : `${drySpins} ${language === 'vi' ? 'lượt chưa ra' : 'spins dry'}`) : (language === 'vi' ? 'Chưa ra' : 'Never hit')}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
           </div>
 
           {/* Column 3: Configuration & History log */}
           <div className="space-y-8">
-            
-            {/* Configuration Settings */}
-            <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800/80 rounded-2xl p-6">
-              <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
+
+            <button
+              data-layout="settings-toggle"
+              onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+              className="hidden"
+            >
+              <span className="inline-flex items-center gap-2">
                 <Sliders className="w-4 h-4 text-indigo-400" />
                 {t('modelConfig')}
-              </h3>
-              
-              <div className="space-y-6">
-                {/* Prediction Mode Selector */}
-                <div>
-                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-3">
-                    {t('predMode')}
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {/* Absolute Mode */}
-                    <button
-                      onClick={() => {
-                        if (config.useAutoModeSwitch) {
-                          setPreviewMode(previewMode === 'absolute' ? null : 'absolute');
-                        } else {
-                          updateConfigState({ ...config, predictionMode: 'absolute' });
-                        }
-                      }}
-                      className={`py-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${
-                        config.useAutoModeSwitch
-                          ? previewMode === 'absolute'
-                            ? 'bg-amber-600/30 border-amber-500 text-amber-300 font-extrabold shadow-[0_0_12px_rgba(245,158,11,0.2)]'
-                            : previewMode === null && activeModeToShow === 'absolute'
-                            ? 'bg-indigo-600 border-indigo-500 text-white font-black'
-                            : 'bg-slate-950/40 border-slate-900/60 text-slate-500 opacity-60 hover:opacity-100 hover:border-slate-800'
-                          : config.predictionMode === 'absolute'
-                          ? 'bg-indigo-600 border-indigo-500 text-white font-black'
-                          : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-400'
-                      }`}
-                    >
-                      <div className="flex flex-col items-center">
-                        <span>{t('modeAbsolute')}</span>
-                        <span className={`text-[10px] font-mono mt-0.5 ${modeReturns.absolute > 0 ? 'text-emerald-400' : modeReturns.absolute < 0 ? 'text-rose-400' : 'text-slate-500'}`}>
-                          ({modeReturns.absolute > 0 ? '+' : ''}{modeReturns.absolute})
-                        </span>
-                      </div>
-                    </button>
+              </span>
+              <span className="text-xs text-slate-500">{isSettingsOpen ? 'HIDE' : 'SHOW'}</span>
+            </button>
 
-                    {/* Relative Mode */}
+            {isSettingsOpen && (
+              <div data-layout="settings-modal" className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/80 px-4 py-8 backdrop-blur-sm">
+                <div className="w-full max-w-2xl">
+                  <div className="mb-3 flex items-center justify-between rounded-2xl border border-slate-800/80 bg-slate-900 px-5 py-4">
+                    <div className="inline-flex items-center gap-2 text-sm font-bold text-white">
+                      <Sliders className="w-4 h-4 text-indigo-400" />
+                      {t('modelConfig')}
+                    </div>
                     <button
-                      onClick={() => {
-                        if (config.useAutoModeSwitch) {
-                          setPreviewMode(previewMode === 'relative' ? null : 'relative');
-                        } else {
-                          updateConfigState({ ...config, predictionMode: 'relative' });
-                        }
-                      }}
-                      className={`py-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${
-                        config.useAutoModeSwitch
-                          ? previewMode === 'relative'
-                            ? 'bg-amber-600/30 border-amber-500 text-amber-300 font-extrabold shadow-[0_0_12px_rgba(245,158,11,0.2)]'
-                            : previewMode === null && activeModeToShow === 'relative'
-                            ? 'bg-indigo-600 border-indigo-500 text-white font-black'
-                            : 'bg-slate-950/40 border-slate-900/60 text-slate-500 opacity-60 hover:opacity-100 hover:border-slate-800'
-                          : config.predictionMode === 'relative'
-                          ? 'bg-indigo-600 border-indigo-500 text-white font-black'
-                          : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-400'
-                      }`}
+                      onClick={() => setIsSettingsOpen(false)}
+                      className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs font-bold text-slate-300 cursor-pointer hover:border-slate-600 hover:text-white"
                     >
-                      <div className="flex flex-col items-center">
-                        <span>{t('modeRelative')}</span>
-                        <span className={`text-[10px] font-mono mt-0.5 ${modeReturns.relative > 0 ? 'text-emerald-400' : modeReturns.relative < 0 ? 'text-rose-400' : 'text-slate-500'}`}>
-                          ({modeReturns.relative > 0 ? '+' : ''}{modeReturns.relative})
-                        </span>
-                      </div>
-                    </button>
-
-                    {/* Decay Mode */}
-                    <button
-                      onClick={() => {
-                        if (config.useAutoModeSwitch) {
-                          setPreviewMode(previewMode === 'decay' ? null : 'decay');
-                        } else {
-                          updateConfigState({ ...config, predictionMode: 'decay' });
-                        }
-                      }}
-                      className={`py-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${
-                        config.useAutoModeSwitch
-                          ? previewMode === 'decay'
-                            ? 'bg-amber-600/30 border-amber-500 text-amber-300 font-extrabold shadow-[0_0_12px_rgba(245,158,11,0.2)]'
-                            : previewMode === null && activeModeToShow === 'decay'
-                            ? 'bg-indigo-600 border-indigo-500 text-white font-black'
-                            : 'bg-slate-950/40 border-slate-900/60 text-slate-500 opacity-60 hover:opacity-100 hover:border-slate-800'
-                          : config.predictionMode === 'decay'
-                          ? 'bg-indigo-600 border-indigo-500 text-white font-black'
-                          : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-400'
-                      }`}
-                    >
-                      <div className="flex flex-col items-center">
-                        <span>{t('modeDecay')}</span>
-                        <span className={`text-[10px] font-mono mt-0.5 ${modeReturns.decay > 0 ? 'text-emerald-400' : modeReturns.decay < 0 ? 'text-rose-400' : 'text-slate-500'}`}>
-                          ({modeReturns.decay > 0 ? '+' : ''}{modeReturns.decay})
-                        </span>
-                      </div>
+                      CLOSE
                     </button>
                   </div>
-                  <p className="text-[10px] text-slate-500 mt-2">
-                    {config.useAutoModeSwitch && history.length >= (config.autoModeWindow || 30) ? (
-                      previewMode ? (
-                        <span className="text-amber-400 font-medium">
-                          ⚠️ {language === 'vi' ? 'Đang xem tạm chế độ' : 'Previewing mode'}: {t(`mode${activeModeToShow.charAt(0).toUpperCase()}${activeModeToShow.slice(1)}` as any)}. {language === 'vi' ? 'Bấm lại để hủy xem tạm.' : 'Click again to cancel preview.'}
-                        </span>
-                      ) : (
-                        <span className="text-indigo-400 font-medium">
-                          {t('activeModeLabel')}: {t(`mode${activeModeToShow.charAt(0).toUpperCase()}${activeModeToShow.slice(1)}` as any)} {language === 'vi' ? '(Tối ưu tự động)' : '(Auto Optimized)'}
-                        </span>
-                      )
-                    ) : (
-                      <>
-                        {config.predictionMode === 'absolute' && t('absoluteDesc')}
-                        {config.predictionMode === 'relative' && t('relativeDesc')}
-                        {config.predictionMode === 'decay' && t('decayDesc')}
-                      </>
-                    )}
-                  </p>
-                </div>
+                  {/* Configuration Settings */}
+                  <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800/80 rounded-2xl p-6">
+                    <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
+                      <Sliders className="w-4 h-4 text-indigo-400" />
+                      {t('modelConfig')}
+                    </h3>
 
-                {/* Decay Factor (visible only in Decay mode) */}
-                {config.predictionMode === 'decay' && (
-                  <div>
-                    <div className="flex justify-between items-center mb-1">
-                      <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                        {t('decayFactorLabel')} (λ)
-                      </label>
-                      <span className="text-xs font-mono font-bold text-indigo-400">{config.decayFactor}</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="0.80"
-                      max="0.99"
-                      step="0.01"
-                      value={config.decayFactor}
-                      onChange={(e) => updateConfigState({ ...config, decayFactor: parseFloat(e.target.value) })}
-                      className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
-                    />
-                    <div className="flex justify-between text-[10px] text-slate-500 mt-1">
-                      <span>0.80 ({t('fastDecay')})</span>
-                      <span>0.99 ({t('slowDecay')})</span>
-                    </div>
-                  </div>
-                )}
+                    <div className="space-y-6">
 
-                {/* Hot/Cold Cycle Adjuster Toggle */}
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
-                      {t('hotColdAdjuster')}
-                    </label>
-                    <span className="text-[10px] text-indigo-400 font-bold bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20">
-                      {t('rtpCompensator')}
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => updateConfigState({ ...config, useRegimeAdjuster: !config.useRegimeAdjuster })}
-                    className={`w-full py-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${config.useRegimeAdjuster ? 'bg-indigo-600 border-indigo-500 text-white font-black' : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-400'}`}
-                  >
-                    {config.useRegimeAdjuster ? t('enabledOn') : t('disabledOff')}
-                  </button>
-                  <p className="text-[10px] text-slate-500 mt-2">
-                    {t('adjusterDesc')}
-                  </p>
-                </div>
+                      {/* Decay Factor (visible only in Decay mode) */}
+                      {config.predictionMode === 'decay' && (
+                        <div>
+                          <div className="flex justify-between items-center mb-1">
+                            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                              {t('decayFactorLabel')} (λ)
+                            </label>
+                            <span className="text-xs font-mono font-bold text-indigo-400">{config.decayFactor}</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="0.80"
+                            max="0.99"
+                            step="0.01"
+                            value={config.decayFactor}
+                            onChange={(e) => updateConfigState({ ...config, decayFactor: parseFloat(e.target.value) })}
+                            className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                          />
+                          <div className="flex justify-between text-[10px] text-slate-500 mt-1">
+                            <span>0.80 ({t('fastDecay')})</span>
+                            <span>0.99 ({t('slowDecay')})</span>
+                          </div>
+                        </div>
+                      )}
 
-                {/* Exhaustion Deck Adjuster Toggle */}
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
-                      {t('deckAdjuster')}
-                    </label>
-                    <span className="text-[10px] text-indigo-400 font-bold bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20">
-                      {t('deckCompensator')}
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => updateConfigState({ ...config, useDeckAdjuster: !config.useDeckAdjuster })}
-                    className={`w-full py-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${config.useDeckAdjuster ? 'bg-indigo-600 border-indigo-500 text-white font-black' : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-400'}`}
-                  >
-                    {config.useDeckAdjuster ? t('enabledOn') : t('disabledOff')}
-                  </button>
-                  <p className="text-[10px] text-slate-500 mt-2">
-                    {t('deckAdjusterDesc')}
-                  </p>
-                </div>
-
-                {/* Assumed Deck Size (visible only when Deck Adjuster is enabled) */}
-                {config.useDeckAdjuster && (
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center mb-1">
-                      <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                        {t('deckSizeLabel')}
-                      </label>
-                      <span className="text-xs font-mono font-bold text-indigo-400">{config.deckSize}</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="100"
-                      max="5000"
-                      step="100"
-                      value={config.deckSize}
-                      onChange={(e) => updateConfigState({ ...config, deckSize: parseInt(e.target.value) })}
-                      className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
-                    />
-                    <div className="flex justify-between text-[10px] text-slate-500 mt-1">
-                      <span>100 {t('deckSpins')}</span>
-                      <span>5000 {t('deckSpins')}</span>
-                    </div>
-
-                    <div className="rounded-xl border border-slate-800 bg-slate-950/40 overflow-hidden">
-                      <div className="flex items-center justify-between px-3 py-2 border-b border-slate-800 text-[10px] uppercase tracking-wider text-slate-500">
-                        <span>{t('deckWindowStats')}</span>
-                        <span>{deckWindowStats.windowSize}/{deckWindowStats.configuredSize}</span>
+                      {/* Hot/Cold Cycle Adjuster Toggle */}
+                      <div>
+                        <div className="flex items-center justify-between mb-3">
+                          <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
+                            {t('hotColdAdjuster')}
+                          </label>
+                          <span className="text-[10px] text-indigo-400 font-bold bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20">
+                            {t('rtpCompensator')}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => updateConfigState({ ...config, useRegimeAdjuster: !config.useRegimeAdjuster })}
+                          className={`w-full py-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${config.useRegimeAdjuster ? 'bg-indigo-600 border-indigo-500 text-white font-black' : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-400'}`}
+                        >
+                          {config.useRegimeAdjuster ? t('enabledOn') : t('disabledOff')}
+                        </button>
+                        <p className="text-[10px] text-slate-500 mt-2">
+                          {t('adjusterDesc')}
+                        </p>
                       </div>
-                      <div className="divide-y divide-slate-800/80">
-                        {ALL_OUTCOMES.map((outcome) => {
-                          const stats = deckWindowStats.outcomes[outcome];
-                          const color = OUTCOME_COLORS[outcome];
-                          const ratioTone = stats.ratioPercent > 100
-                            ? 'text-rose-400'
-                            : stats.ratioPercent < 100
-                              ? 'text-emerald-400'
-                              : 'text-slate-400';
 
-                          return (
-                            <div key={outcome} className="grid grid-cols-[1fr_auto_auto] gap-2 items-center px-3 py-2 text-xs">
-                              <span className={`font-mono font-bold ${color.text}`}>
-                                {outcome.toUpperCase()}
-                              </span>
-                              <span className="text-slate-300 font-semibold text-right flex flex-col items-end">
-                                <span>
-                                  {stats.count}
-                                  <span className="text-slate-600 font-normal"> / {stats.expected}</span>
-                                </span>
-                                <span className="text-[10px] text-slate-500 font-normal">
-                                  {stats.countPercent}% / {stats.expectedPercent}%
-                                </span>
-                              </span>
-                              <span className={`font-mono font-bold ${ratioTone}`}>
-                                {stats.ratioPercent}%
+                      {/* Exhaustion Deck Adjuster Toggle */}
+                      <div>
+                        <div className="flex items-center justify-between mb-3">
+                          <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
+                            {t('deckAdjuster')}
+                          </label>
+                          <span className="text-[10px] text-indigo-400 font-bold bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20">
+                            {t('deckCompensator')}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => updateConfigState({ ...config, useDeckAdjuster: !config.useDeckAdjuster })}
+                          className={`w-full py-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${config.useDeckAdjuster ? 'bg-indigo-600 border-indigo-500 text-white font-black' : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-400'}`}
+                        >
+                          {config.useDeckAdjuster ? t('enabledOn') : t('disabledOff')}
+                        </button>
+                        <p className="text-[10px] text-slate-500 mt-2">
+                          {t('deckAdjusterDesc')}
+                        </p>
+                      </div>
+
+                      {/* Assumed Deck Size (visible only when Deck Adjuster is enabled) */}
+                      {config.useDeckAdjuster && (
+                        <div className="space-y-4">
+                          <div className="flex justify-between items-center mb-1">
+                            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                              {t('deckSizeLabel')}
+                            </label>
+                            <span className="text-xs font-mono font-bold text-indigo-400">{config.deckSize}</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="100"
+                            max="5000"
+                            step="100"
+                            value={config.deckSize}
+                            onChange={(e) => updateConfigState({ ...config, deckSize: parseInt(e.target.value) })}
+                            className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                          />
+                          <div className="flex justify-between text-[10px] text-slate-500 mt-1">
+                            <span>100 {t('deckSpins')}</span>
+                            <span>5000 {t('deckSpins')}</span>
+                          </div>
+
+                          <div className="rounded-xl border border-slate-800 bg-slate-950/40 overflow-hidden">
+                            <div className="flex items-center justify-between px-3 py-2 border-b border-slate-800 text-[10px] uppercase tracking-wider text-slate-500">
+                              <span>{t('deckWindowStats')}</span>
+                              <span>{deckWindowStats.windowSize}/{deckWindowStats.configuredSize}</span>
+                            </div>
+                            <div className="divide-y divide-slate-800/80">
+                              {ALL_OUTCOMES.map((outcome) => {
+                                const stats = deckWindowStats.outcomes[outcome];
+                                const color = OUTCOME_COLORS[outcome];
+                                const ratioTone = stats.ratioPercent > 100
+                                  ? 'text-rose-400'
+                                  : stats.ratioPercent < 100
+                                    ? 'text-emerald-400'
+                                    : 'text-slate-400';
+
+                                return (
+                                  <div key={outcome} className="grid grid-cols-[1fr_auto_auto] gap-2 items-center px-3 py-2 text-xs">
+                                    <span className={`font-mono font-bold ${color.text}`}>
+                                      {outcome.toUpperCase()}
+                                    </span>
+                                    <span className="text-slate-300 font-semibold text-right flex flex-col items-end">
+                                      <span>
+                                        {stats.count}
+                                        <span className="text-slate-600 font-normal"> / {stats.expected}</span>
+                                      </span>
+                                      <span className="text-[10px] text-slate-500 font-normal">
+                                        {stats.countPercent}% / {stats.expectedPercent}%
+                                      </span>
+                                    </span>
+                                    <span className={`font-mono font-bold ${ratioTone}`}>
+                                      {stats.ratioPercent}%
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Adaptive Safety Margin Toggle */}
+                      <div>
+                        <div className="flex items-center justify-between mb-3">
+                          <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
+                            {t('useAdaptiveSafety')}
+                          </label>
+                          <span className="text-[10px] text-indigo-400 font-bold bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20">
+                            {t('adaptiveSafetyStatus')}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => updateConfigState({ ...config, useAdaptiveSafety: !config.useAdaptiveSafety })}
+                          className={`w-full py-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${config.useAdaptiveSafety ? 'bg-indigo-600 border-indigo-500 text-white font-black' : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-400'}`}
+                        >
+                          {config.useAdaptiveSafety ? t('enabledOn') : t('disabledOff')}
+                        </button>
+                        <p className="text-[10px] text-slate-500 mt-2">
+                          {t('adaptiveSafetyDesc')}
+                        </p>
+                      </div>
+
+                      {/* Auto Mode Switching Toggle */}
+                      <div>
+                        <div className="flex items-center justify-between mb-3">
+                          <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
+                            {t('useAutoModeSwitch')}
+                          </label>
+                          <span className="text-[10px] text-indigo-400 font-bold bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20">
+                            Auto Mode
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => updateConfigState({ ...config, useAutoModeSwitch: !config.useAutoModeSwitch })}
+                          className={`w-full py-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${config.useAutoModeSwitch ? 'bg-indigo-600 border-indigo-500 text-white font-black' : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-400'}`}
+                        >
+                          {config.useAutoModeSwitch ? t('enabledOn') : t('disabledOff')}
+                        </button>
+                        <p className="text-[10px] text-slate-500 mt-2">
+                          {t('autoModeSwitchDesc')}
+                        </p>
+
+                        {config.useAutoModeSwitch && (
+                          <div className="mt-4 border-t border-slate-800/40 pt-3">
+                            <div className="flex justify-between items-center mb-1">
+                              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                                {t('autoModeWindowLabel')}
+                              </label>
+                              <span className="text-xs font-mono font-bold text-indigo-400">
+                                {config.autoModeWindow || 3} {t('autoSpins')}
                               </span>
                             </div>
-                          );
-                        })}
+                            <input
+                              type="range"
+                              min="1"
+                              max="50"
+                              step="1"
+                              value={config.autoModeWindow || 3}
+                              onChange={(e) => updateConfigState({ ...config, autoModeWindow: parseInt(e.target.value) })}
+                              className="w-full h-1.5 bg-slate-950 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                            />
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  </div>
-                )}
 
-                {/* Adaptive Safety Margin Toggle */}
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
-                      {t('useAdaptiveSafety')}
-                    </label>
-                    <span className="text-[10px] text-indigo-400 font-bold bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20">
-                      {t('adaptiveSafetyStatus')}
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => updateConfigState({ ...config, useAdaptiveSafety: !config.useAdaptiveSafety })}
-                    className={`w-full py-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${config.useAdaptiveSafety ? 'bg-indigo-600 border-indigo-500 text-white font-black' : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-400'}`}
-                  >
-                    {config.useAdaptiveSafety ? t('enabledOn') : t('disabledOff')}
-                  </button>
-                  <p className="text-[10px] text-slate-500 mt-2">
-                    {t('adaptiveSafetyDesc')}
-                  </p>
-                </div>
-
-                {/* Auto Mode Switching Toggle */}
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
-                      {t('useAutoModeSwitch')}
-                    </label>
-                    <span className="text-[10px] text-indigo-400 font-bold bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20">
-                      Auto Mode
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => updateConfigState({ ...config, useAutoModeSwitch: !config.useAutoModeSwitch })}
-                    className={`w-full py-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${config.useAutoModeSwitch ? 'bg-indigo-600 border-indigo-500 text-white font-black' : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-400'}`}
-                  >
-                    {config.useAutoModeSwitch ? t('enabledOn') : t('disabledOff')}
-                  </button>
-                  <p className="text-[10px] text-slate-500 mt-2">
-                    {t('autoModeSwitchDesc')}
-                  </p>
-
-                  {config.useAutoModeSwitch && (
-                    <div className="mt-4 border-t border-slate-800/40 pt-3">
-                      <div className="flex justify-between items-center mb-1">
-                        <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                          {t('autoModeWindowLabel')}
+                      <div>
+                        <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-3">
+                          Hot Regime
                         </label>
-                        <span className="text-xs font-mono font-bold text-indigo-400">
-                          {config.autoModeWindow || 30} {t('autoSpins')}
-                        </span>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <div className="flex justify-between items-center mb-1">
+                              <span className="text-[10px] text-slate-500 uppercase">Window</span>
+                              <span className="text-xs font-mono font-bold text-indigo-400">{config.hotRegimeWindow || 15}</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="5"
+                              max="50"
+                              step="1"
+                              value={config.hotRegimeWindow || 15}
+                              onChange={(e) => updateConfigState({ ...config, hotRegimeWindow: parseInt(e.target.value) })}
+                              className="w-full h-1.5 bg-slate-950 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                            />
+                          </div>
+                          <div>
+                            <div className="flex justify-between items-center mb-1">
+                              <span className="text-[10px] text-slate-500 uppercase">Threshold</span>
+                              <span className="text-xs font-mono font-bold text-indigo-400">{config.hotRegimeThreshold || 4}</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="1"
+                              max="15"
+                              step="1"
+                              value={config.hotRegimeThreshold || 4}
+                              onChange={(e) => updateConfigState({ ...config, hotRegimeThreshold: parseInt(e.target.value) })}
+                              className="w-full h-1.5 bg-slate-950 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                            />
+                          </div>
+                        </div>
+                        <p className="text-[10px] text-slate-500 mt-2">
+                          Hot khi số con lớn trong cửa sổ đạt ngưỡng cấu hình.
+                        </p>
                       </div>
-                      <input
-                        type="range"
-                        min="15"
-                        max="100"
-                        step="5"
-                        value={config.autoModeWindow || 30}
-                        onChange={(e) => updateConfigState({ ...config, autoModeWindow: parseInt(e.target.value) })}
-                        className="w-full h-1.5 bg-slate-950 rounded-lg appearance-none cursor-pointer accent-indigo-500"
-                      />
+
+                      {/* Active History Window Presets */}
+                      <div>
+                        <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-3">
+                          {t('activeHistoryWindow')}
+                        </label>
+                        <div className="grid grid-cols-3 gap-2">
+                          {[50, 100, 200].map((preset) => (
+                            <button
+                              key={preset}
+                              onClick={() => updateConfigState({ ...config, historyWindow: preset })}
+                              className={`py-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${config.historyWindow === preset ? 'bg-indigo-600 border-indigo-500 text-white font-black' : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-400'}`}
+                            >
+                              {preset} {t('presetSpins')}
+                            </button>
+                          ))}
+                        </div>
+                        <p className="text-[10px] text-slate-500 mt-2">
+                          {t('windowDesc')}
+                        </p>
+                      </div>
+
+                      {/* Prior Strength */}
+                      <div>
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                            {t('priorStrength')}
+                          </label>
+                          <span className="text-xs font-mono font-bold text-indigo-400">{config.priorStrength}</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="5"
+                          max="50"
+                          step="5"
+                          value={config.priorStrength}
+                          onChange={(e) => updateConfigState({ ...config, priorStrength: parseInt(e.target.value) })}
+                          className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                        />
+                        <div className="flex justify-between text-[10px] text-slate-500 mt-1">
+                          <span>5 ({t('weakPrior')})</span>
+                          <span>50 ({t('strongPrior')})</span>
+                        </div>
+                      </div>
+
+                      {/* Markov Order */}
+                      <div>
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                            {t('markovOrder')}
+                          </label>
+                          <span className="text-xs font-mono font-bold text-indigo-400">{config.maxOrder}</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="1"
+                          max="3"
+                          step="1"
+                          value={config.maxOrder}
+                          onChange={(e) => updateConfigState({ ...config, maxOrder: parseInt(e.target.value) })}
+                          className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                        />
+                        <div className="flex justify-between text-[10px] text-slate-500 mt-1">
+                          <span>1 ({t('orderLabel')} 1)</span>
+                          <span>3 ({t('orderLabel')} 3)</span>
+                        </div>
+                      </div>
+
+                      {/* Min Support */}
+                      <div>
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                            {t('minSupportSlider')}
+                          </label>
+                          <span className="text-xs font-mono font-bold text-indigo-400">{config.minSupport}</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="1"
+                          max="10"
+                          step="1"
+                          value={config.minSupport}
+                          onChange={(e) => updateConfigState({ ...config, minSupport: parseInt(e.target.value) })}
+                          className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                        />
+                        <div className="flex justify-between text-[10px] text-slate-500 mt-1">
+                          <span>1 ({t('lowSupport')})</span>
+                          <span>10 ({t('highSupport')})</span>
+                        </div>
+                      </div>
                     </div>
-                  )}
-                </div>
-
-                {/* Active History Window Presets */}
-                <div>
-                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-3">
-                    {t('activeHistoryWindow')}
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[50, 100, 200].map((preset) => (
-                      <button
-                        key={preset}
-                        onClick={() => updateConfigState({ ...config, historyWindow: preset })}
-                        className={`py-2 text-xs font-bold rounded-lg border transition-all cursor-pointer ${config.historyWindow === preset ? 'bg-indigo-600 border-indigo-500 text-white font-black' : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-400'}`}
-                      >
-                        {preset} {t('presetSpins')}
-                      </button>
-                    ))}
-                  </div>
-                  <p className="text-[10px] text-slate-500 mt-2">
-                    {t('windowDesc')}
-                  </p>
-                </div>
-
-                {/* Prior Strength */}
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                      {t('priorStrength')}
-                    </label>
-                    <span className="text-xs font-mono font-bold text-indigo-400">{config.priorStrength}</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="5"
-                    max="50"
-                    step="5"
-                    value={config.priorStrength}
-                    onChange={(e) => updateConfigState({ ...config, priorStrength: parseInt(e.target.value) })}
-                    className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
-                  />
-                  <div className="flex justify-between text-[10px] text-slate-500 mt-1">
-                    <span>5 ({t('weakPrior')})</span>
-                    <span>50 ({t('strongPrior')})</span>
-                  </div>
-                </div>
-
-                {/* Markov Order */}
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                      {t('markovOrder')}
-                    </label>
-                    <span className="text-xs font-mono font-bold text-indigo-400">{config.maxOrder}</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="1"
-                    max="3"
-                    step="1"
-                    value={config.maxOrder}
-                    onChange={(e) => updateConfigState({ ...config, maxOrder: parseInt(e.target.value) })}
-                    className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
-                  />
-                  <div className="flex justify-between text-[10px] text-slate-500 mt-1">
-                    <span>1 ({t('orderLabel')} 1)</span>
-                    <span>3 ({t('orderLabel')} 3)</span>
-                  </div>
-                </div>
-
-                {/* Min Support */}
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                      {t('minSupportSlider')}
-                    </label>
-                    <span className="text-xs font-mono font-bold text-indigo-400">{config.minSupport}</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="1"
-                    max="10"
-                    step="1"
-                    value={config.minSupport}
-                    onChange={(e) => updateConfigState({ ...config, minSupport: parseInt(e.target.value) })}
-                    className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
-                  />
-                  <div className="flex justify-between text-[10px] text-slate-500 mt-1">
-                    <span>1 ({t('lowSupport')})</span>
-                    <span>10 ({t('highSupport')})</span>
                   </div>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* Backtest Summary Panel */}
             <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800/80 rounded-2xl p-6">
@@ -1138,7 +1427,7 @@ export default function App() {
             </div>
 
             {/* History Log Panel */}
-            <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800/80 rounded-2xl p-6 flex flex-col max-h-[500px]">
+            <div className="hidden">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-bold text-white flex items-center gap-2">
                   <History className="w-4 h-4 text-indigo-400" />
@@ -1163,9 +1452,9 @@ export default function App() {
                     const isActive = originalIdx >= history.length - config.historyWindow;
                     const isEditing = editingId === item.id;
                     const color = OUTCOME_COLORS[item.outcome];
-                    
+
                     return (
-                      <div 
+                      <div
                         key={item.id}
                         className={`flex items-center justify-between p-3 rounded-lg border transition-all ${isActive ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-950/20 border-slate-900 opacity-40'}`}
                       >
@@ -1173,7 +1462,7 @@ export default function App() {
                           <span className="text-xs text-slate-600 font-mono font-semibold w-6">
                             #{originalIdx + 1}
                           </span>
-                          
+
                           {isEditing ? (
                             <select
                               value={editingOutcome}
