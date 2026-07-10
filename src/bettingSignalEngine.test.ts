@@ -390,5 +390,21 @@ describe('Betting Signal Engine', () => {
       // Bet size = 1,000,000 * 0.0555 * 0.25 = 13889
       expect(bets.x10).toBe(13889);
     });
+
+    it('calculates max consecutive wins and losses streaks in backtest correctly', () => {
+      const history: Outcome[] = [
+        'x5_1', 'x5_1', 'x5_1', 'x5_1', 'x5_1',
+        'x5_1', 'x5_1', 'x5_1', 'x5_1', 'x5_1'
+      ];
+      const config: Config = {
+        ...DEFAULT_CONFIG,
+        predictionMode: 'absolute',
+        useAutoModeSwitch: false,
+        priorStrength: 0,
+      };
+      const result = calculateBacktest(history, config);
+      expect(result.maxConsecutiveWins).toBeGreaterThanOrEqual(5);
+      expect(result.maxConsecutiveLosses).toBe(0);
+    });
   });
 });

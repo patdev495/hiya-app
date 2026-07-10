@@ -290,7 +290,14 @@ export const calculateBacktest = (
     },
     hitsByTarget: {},
     estimatedReturn: 0,
+    maxConsecutiveWins: 0,
+    maxConsecutiveLosses: 0,
   };
+
+  let currentWins = 0;
+  let currentLosses = 0;
+  let maxConsecutiveWins = 0;
+  let maxConsecutiveLosses = 0;
 
   for (let i = 1; i < history.length; i++) {
     const prefix = history.slice(0, i);
@@ -304,7 +311,21 @@ export const calculateBacktest = (
     const targets = signal.targets ?? (signal.target && ALL_OUTCOMES.includes(signal.target as Outcome) ? [signal.target as Outcome] : []);
     if (signal.action === 'skip' || targets.length === 0) {
       summary.skipped++;
+      currentWins = 0;
+      currentLosses = 0;
       continue;
+    }
+
+    // Check if any target was hit
+    const hitAny = targets.includes(actual);
+    if (hitAny) {
+      currentWins++;
+      currentLosses = 0;
+      maxConsecutiveWins = Math.max(maxConsecutiveWins, currentWins);
+    } else {
+      currentLosses++;
+      currentWins = 0;
+      maxConsecutiveLosses = Math.max(maxConsecutiveLosses, currentLosses);
     }
 
     for (const target of targets) {
@@ -325,5 +346,7 @@ export const calculateBacktest = (
   }
 
   summary.estimatedReturn = Math.round(summary.estimatedReturn * 100) / 100;
+  summary.maxConsecutiveWins = maxConsecutiveWins;
+  summary.maxConsecutiveLosses = maxConsecutiveLosses;
   return summary;
 };

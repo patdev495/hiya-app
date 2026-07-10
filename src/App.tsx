@@ -282,10 +282,15 @@ export default function App() {
   const autoWindow = config.autoModeWindow || 3;
   const autoHistory = historyOutcomes.slice(-autoWindow);
   const previousAutoHistory = historyOutcomes.slice(0, -1).slice(-autoWindow);
+  const modeBacktests = {
+    absolute: calculateBacktest(autoHistory, { ...config, predictionMode: 'absolute', useAutoModeSwitch: false, useAdaptiveSafety: false }),
+    relative: calculateBacktest(autoHistory, { ...config, predictionMode: 'relative', useAutoModeSwitch: false, useAdaptiveSafety: false }),
+    decay: calculateBacktest(autoHistory, { ...config, predictionMode: 'decay', useAutoModeSwitch: false, useAdaptiveSafety: false }),
+  };
   const modeReturns = {
-    absolute: calculateBacktest(autoHistory, { ...config, predictionMode: 'absolute', useAutoModeSwitch: false, useAdaptiveSafety: false }).estimatedReturn,
-    relative: calculateBacktest(autoHistory, { ...config, predictionMode: 'relative', useAutoModeSwitch: false, useAdaptiveSafety: false }).estimatedReturn,
-    decay: calculateBacktest(autoHistory, { ...config, predictionMode: 'decay', useAutoModeSwitch: false, useAdaptiveSafety: false }).estimatedReturn,
+    absolute: modeBacktests.absolute.estimatedReturn,
+    relative: modeBacktests.relative.estimatedReturn,
+    decay: modeBacktests.decay.estimatedReturn,
   };
   const previousModeReturns = {
     absolute: calculateBacktest(previousAutoHistory, { ...config, predictionMode: 'absolute', useAutoModeSwitch: false, useAdaptiveSafety: false }).estimatedReturn,
@@ -523,6 +528,15 @@ export default function App() {
                         <div className={`mt-1 font-mono text-xl font-black ${returnTone}`}>
                           {modeReturn > 0 ? '+' : ''}{modeReturn}
                           <span className={`ml-2 text-sm ${deltaTone}`}>({modeReturnDelta > 0 ? '+' : ''}{modeReturnDelta})</span>
+                        </div>
+                        <div className="flex items-center gap-2 mt-1 text-[10px] text-slate-500 font-bold font-mono">
+                          <span className="flex items-center gap-0.5 text-emerald-400" title={language === 'en' ? 'Max consecutive wins' : 'Chuỗi thắng liên tiếp tối đa'}>
+                            🔥 {modeBacktests[mode].maxConsecutiveWins || 0}
+                          </span>
+                          <span className="text-slate-800">|</span>
+                          <span className="flex items-center gap-0.5 text-rose-400" title={language === 'en' ? 'Max consecutive losses' : 'Chuỗi thua liên tiếp tối đa'}>
+                            💀 {modeBacktests[mode].maxConsecutiveLosses || 0}
+                          </span>
                         </div>
                       </div>
                       {stateLabel && (
@@ -1597,7 +1611,7 @@ export default function App() {
                 <TrendingUp className="w-4 h-4 text-indigo-400" />
                 {t('backtestSummary')}
               </h3>
-              <div className="grid grid-cols-2 gap-3 text-xs">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
                 <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-3">
                   <div className="text-slate-500">{t('evaluatedSpins')}</div>
                   <div className="text-xl font-black text-white">{backtestSummary.totalEvaluated}</div>
@@ -1615,6 +1629,14 @@ export default function App() {
                   <div className={`text-xl font-black ${backtestSummary.estimatedReturn >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                     {backtestSummary.estimatedReturn}
                   </div>
+                </div>
+                <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-3">
+                  <div className="text-slate-500">{language === 'en' ? 'Max Win Streak' : 'Chuỗi thắng max'}</div>
+                  <div className="text-xl font-black text-emerald-400">🔥 {backtestSummary.maxConsecutiveWins || 0}</div>
+                </div>
+                <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-3">
+                  <div className="text-slate-500">{language === 'en' ? 'Max Loss Streak' : 'Chuỗi thua max'}</div>
+                  <div className="text-xl font-black text-rose-400">💀 {backtestSummary.maxConsecutiveLosses || 0}</div>
                 </div>
               </div>
               <div className="mt-4 space-y-2">

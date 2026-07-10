@@ -87,6 +87,8 @@ export interface BacktestSummary {
   actionCounts: Record<StakeLevel, number>;
   hitsByTarget: Partial<Record<Outcome | TargetTier, { hits: number; attempts: number; hitRate: number }>>;
   estimatedReturn: number;
+  maxConsecutiveWins: number;
+  maxConsecutiveLosses: number;
 }
 
 export interface DeckOutcomeStats {
