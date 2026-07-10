@@ -1,4 +1,4 @@
-import { PlusCircle, Target, BarChart3 } from 'lucide-react';
+import { BarChart3, PlusCircle, Target } from 'lucide-react';
 
 export type MobileTab = 'record' | 'predict' | 'analyze';
 
@@ -12,7 +12,7 @@ export default function MobileTabBar({ activeTab, onTabChange, t }: MobileTabBar
   return (
     <div
       data-layout="mobile-tab-bar"
-      className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-slate-950/95 backdrop-blur-lg border-t border-slate-900 px-6 pt-2 pb-safe"
+      className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-slate-950/95 backdrop-blur-lg border-t border-slate-900 px-6 pt-2"
       style={{
         paddingBottom: 'calc(8px + env(safe-area-inset-bottom, 0px))',
       }}
@@ -27,7 +27,7 @@ export default function MobileTabBar({ activeTab, onTabChange, t }: MobileTabBar
           }`}
         >
           <PlusCircle className="w-5 h-5" />
-          <span className="text-[10px] uppercase tracking-wider">{t('tabRecord') || 'Nhập'}</span>
+          <span className="text-[10px] uppercase tracking-wider">{t('tabRecord')}</span>
         </button>
 
         <button
@@ -39,7 +39,7 @@ export default function MobileTabBar({ activeTab, onTabChange, t }: MobileTabBar
           }`}
         >
           <Target className="w-5 h-5" />
-          <span className="text-[10px] uppercase tracking-wider">{t('tabPredict') || 'Dự đoán'}</span>
+          <span className="text-[10px] uppercase tracking-wider">{t('tabPredict')}</span>
         </button>
 
         <button
@@ -51,7 +51,7 @@ export default function MobileTabBar({ activeTab, onTabChange, t }: MobileTabBar
           }`}
         >
           <BarChart3 className="w-5 h-5" />
-          <span className="text-[10px] uppercase tracking-wider">{t('tabAnalyze') || 'Phân tích'}</span>
+          <span className="text-[10px] uppercase tracking-wider">{t('tabAnalyze')}</span>
         </button>
       </div>
     </div>

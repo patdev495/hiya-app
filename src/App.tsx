@@ -322,10 +322,10 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-indigo-500/30 selection:text-indigo-200 antialiased pb-24 md:pb-12">
+    <div className="relative min-h-screen overflow-x-hidden bg-slate-950 text-slate-100 font-sans selection:bg-indigo-500/30 selection:text-indigo-200 antialiased pb-24 md:pb-12">
       {/* Premium Gradient Background Glows */}
-      <div className="absolute top-0 left-1/4 w-96 h-96 bg-indigo-600/10 rounded-full blur-[128px] pointer-events-none" />
-      <div className="absolute top-10 right-1/4 w-96 h-96 bg-fuchsia-600/10 rounded-full blur-[128px] pointer-events-none" />
+      <div className="pointer-events-none absolute top-0 left-1/4 h-72 w-72 rounded-full bg-indigo-600/10 blur-[96px] sm:h-96 sm:w-96 sm:blur-[128px]" />
+      <div className="pointer-events-none absolute top-10 right-1/4 h-72 w-72 rounded-full bg-fuchsia-600/10 blur-[96px] sm:h-96 sm:w-96 sm:blur-[128px]" />
 
       {/* Main Container */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
@@ -403,9 +403,9 @@ export default function App() {
           </div>
 
           {/* Row 2: Badges. Desktop: inline-flex, Mobile: horizontal scrollable container */}
-          <div className="mt-3 flex items-center gap-2 overflow-x-auto whitespace-nowrap scrollbar-none pb-1 md:pb-0">
+          <div className="mt-3 flex max-w-full min-w-0 items-center gap-2 overflow-x-auto whitespace-nowrap pb-1 md:pb-0">
             {/* Live Dot for Mobile (wrapped here) */}
-            <div className="flex md:hidden items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900/60 px-2 py-0.5 text-[10px] font-bold">
+            <div className="flex shrink-0 md:hidden items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900/60 px-2 py-0.5 text-[10px] font-bold">
               <span className="flex h-1.5 w-1.5 relative">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-indigo-500"></span>
@@ -415,7 +415,7 @@ export default function App() {
 
             <div
               data-layout="hot-regime-header"
-              className={`inline-flex items-center gap-1.5 rounded-lg border px-2 py-0.5 text-[10px] font-bold ${
+              className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-2 py-0.5 text-[10px] font-bold ${
                 isHotRegime
                   ? 'border-rose-500/40 bg-rose-500/10 text-rose-300'
                   : 'border-blue-500/40 bg-blue-500/10 text-blue-300'
@@ -427,7 +427,7 @@ export default function App() {
             </div>
 
             <div
-              className={`inline-flex items-center gap-1 rounded-lg border px-2 py-0.5 text-[10px] font-bold ${
+              className={`inline-flex shrink-0 items-center gap-1 rounded-lg border px-2 py-0.5 text-[10px] font-bold ${
                 historyEntropy <= 40
                   ? 'border-violet-500/40 bg-violet-500/10 text-violet-300'
                   : historyEntropy >= 80
@@ -446,7 +446,7 @@ export default function App() {
 
             {bettingSignal.rtpActual !== undefined && (
               <div
-                className={`inline-flex items-center gap-1.5 rounded-lg border px-2 py-0.5 text-[10px] font-bold ${
+                className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-2 py-0.5 text-[10px] font-bold ${
                   (bettingSignal.rtpDeviation ?? 0) < 0
                     ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
                     : 'border-rose-500/40 bg-rose-500/10 text-rose-300'
@@ -596,11 +596,66 @@ export default function App() {
                   {[...history].reverse().map((item, reverseIdx) => {
                     const originalIdx = history.length - 1 - reverseIdx;
                     const isActive = originalIdx >= history.length - config.historyWindow;
+                    const isEditing = editingId === item.id;
                     const color = OUTCOME_COLORS[item.outcome];
                     return (
-                      <div key={item.id} className={`flex items-center justify-between p-2.5 rounded-lg border transition-all ${isActive ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-950/20 border-slate-900 opacity-40'}`}>
-                        <span className="text-xs text-slate-600 font-mono font-semibold">#{originalIdx + 1}</span>
-                        <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded ${color.bg} ${color.text} border ${color.border}`}>{item.outcome.toUpperCase()}</span>
+                      <div key={item.id} className={`flex items-center justify-between gap-2 p-2.5 rounded-lg border transition-all ${isActive ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-950/20 border-slate-900 opacity-40'}`}>
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="shrink-0 text-xs text-slate-600 font-mono font-semibold">#{originalIdx + 1}</span>
+                          {isEditing ? (
+                            <select
+                              value={editingOutcome}
+                              onChange={(e) => setEditingOutcome(e.target.value as Outcome)}
+                              className="max-w-[104px] rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-white outline-none focus:ring-1 focus:ring-indigo-500"
+                            >
+                              {ALL_OUTCOMES.map(o => (
+                                <option key={o} value={o}>{o.toUpperCase()}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <span className={`truncate text-xs font-mono font-bold px-2 py-0.5 rounded ${color.bg} ${color.text} border ${color.border}`}>
+                              {item.outcome.toUpperCase()}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex shrink-0 items-center gap-1">
+                          {isEditing ? (
+                            <>
+                              <button
+                                onClick={() => handleSaveEdit(item.id)}
+                                className="rounded p-1 text-emerald-400 transition-colors hover:bg-emerald-500/10 cursor-pointer"
+                                title={t('saveEdit' as any)}
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => { setEditingId(null); setEditingOutcome(''); }}
+                                className="rounded p-1 text-slate-400 transition-colors hover:bg-slate-800 cursor-pointer"
+                                title={t('cancelEdit' as any)}
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                onClick={() => handleStartEdit(item)}
+                                className="rounded p-1 text-slate-400 transition-colors hover:bg-slate-800 hover:text-indigo-400 cursor-pointer"
+                                title={t('editRow')}
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteItem(item.id)}
+                                className="rounded p-1 text-slate-400 transition-colors hover:bg-slate-800 hover:text-rose-400 cursor-pointer"
+                                title={t('deleteRow')}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
@@ -714,7 +769,7 @@ export default function App() {
                     {OUTCOME_LABELS[o]}
                   </span>
                   <span className="text-[9px] text-slate-500 mt-0.5 font-medium">
-                    {drySpins !== null ? (drySpins === 0 ? (language === 'vi' ? 'Vá»«a ra' : 'Just hit') : `${drySpins} ${language === 'vi' ? 'lÆ°á»£t chÆ°a ra' : 'spins dry'}`) : (language === 'vi' ? 'ChÆ°a ra' : 'Never hit')}
+                    {drySpins !== null ? (drySpins === 0 ? (language === 'vi' ? 'Vừa ra' : 'Just hit') : `${drySpins} ${language === 'vi' ? 'lượt chưa ra' : 'spins dry'}`) : (language === 'vi' ? 'Chưa ra' : 'Never hit')}
                   </span>
                 </button>
               );

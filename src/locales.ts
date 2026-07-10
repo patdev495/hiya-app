@@ -134,6 +134,14 @@ export const translations = {
     rtpActualLabel: 'Actual RTP',
     rtpDeviationLabel: 'RTP Deviation',
     recommendedBetLabel: 'Suggested bet',
+    tabRecord: 'Record',
+    tabPredict: 'Predict',
+    tabAnalyze: 'Analyze',
+    closeSettings: 'Close',
+    languageLabel: 'Language',
+    hotRegimeConfigDesc: 'Hot when the number of large outcomes in the window reaches the configured threshold.',
+    saveEdit: 'Save',
+    cancelEdit: 'Cancel',
   },
   vi: {
     liveSystem: 'Hệ thống Dự đoán Trực tiếp',
@@ -268,5 +276,13 @@ export const translations = {
     rtpActualLabel: 'RTP thực tế',
     rtpDeviationLabel: 'Độ lệch RTP',
     recommendedBetLabel: 'Cược gợi ý',
+    tabRecord: 'Nhập',
+    tabPredict: 'Dự đoán',
+    tabAnalyze: 'Phân tích',
+    closeSettings: 'Đóng',
+    languageLabel: 'Ngôn ngữ',
+    hotRegimeConfigDesc: 'Hot khi số con lớn trong cửa sổ đạt ngưỡng cấu hình.',
+    saveEdit: 'Lưu',
+    cancelEdit: 'Hủy',
   }
 };

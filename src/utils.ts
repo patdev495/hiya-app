@@ -35,20 +35,28 @@ export const formatSignalTargets = (targets: string[] | undefined, fallback: str
 export const translateReason = (reason: string, lang: Language): string => {
   if (lang === 'en') return reason;
 
-  // Match outcome clear message (e.g. x5_3 clears break-even plus safety margin.)
   const outcomeClearMatch = reason.match(/^(\w+) clears break-even plus safety margin\.$/);
   if (outcomeClearMatch) {
     return `${outcomeClearMatch[1].toUpperCase()} vượt điểm hòa vốn + biên an toàn.`;
   }
 
   const dict: Record<string, string> = {
-    'Exact x5 slot has strong supported evidence.': 'Ô x5 cụ thể có bằng chứng hỗ trợ mạnh mẽ.',
+    'Exact x5 slot has strong supported evidence.': 'Ô x5 cụ thể có bằng chứng hỗ trợ mạnh.',
     'No outcome clears break-even plus safety margin.': 'Không có ô nào vượt điểm hòa vốn + biên an toàn.',
-    'Only generic x5 outcomes cleared the edge gate; exact-slot support is required.': 'Chỉ có các ô x5 chung vượt ngưỡng; yêu cầu hỗ trợ ô cụ thể.',
+    'Only generic x5 outcomes cleared the edge gate; exact-slot support is required.': 'Chỉ có các ô x5 chung vượt ngưỡng; cần hỗ trợ theo ô cụ thể.',
     'Hot regime supports large-outcome targets.': 'Chế độ Hot hỗ trợ mục tiêu ô nhân lớn.',
     'Cold regime conflicts with large-outcome targets.': 'Chế độ Cold xung đột với mục tiêu ô nhân lớn.',
     'Transition evidence has medium or high support.': 'Bằng chứng chuyển cảnh có hỗ trợ trung bình hoặc cao.',
+    'Hot regime: bet large outcomes above 2x break-even.': 'Hot: đặt các ô nhân lớn khi vượt 2x điểm hòa vốn.',
+    'Non-hot regime: bet large outcomes above 3x break-even.': 'Không Hot: đặt các ô nhân lớn khi vượt 3x điểm hòa vốn.',
+    'Hot regime: bet x5 slots only above 30%.': 'Hot: chỉ đặt ô x5 khi xác suất trên 30%.',
+    'Non-hot regime: always bet top two x5 slots.': 'Không Hot: luôn chọn hai ô x5 cao nhất.',
+    'No outcome qualifies under the current regime rules.': 'Không có ô nào đủ điều kiện theo luật chế độ hiện tại.',
   };
+
+  if (reason.startsWith('Bet targets:')) {
+    return reason.replace('Bet targets:', 'Mục tiêu đặt:');
+  }
 
   return dict[reason] || reason;
 };

@@ -49,7 +49,7 @@ export default function SettingsModal({
             onClick={onClose}
             className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs font-bold text-slate-300 cursor-pointer hover:border-slate-600 hover:text-white"
           >
-            CLOSE
+            {t('closeSettings')}
           </button>
         </div>
 
@@ -66,7 +66,7 @@ export default function SettingsModal({
             <div className="md:hidden space-y-4 pb-4 border-b border-slate-800/80">
               <div>
                 <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-2">
-                  Ngôn ngữ / Language
+                  {t('languageLabel')} / Language
                 </label>
                 <div className="flex gap-2">
                   <button
@@ -377,7 +377,7 @@ export default function SettingsModal({
                 </div>
               </div>
               <p className="text-[10px] text-slate-500 mt-2">
-                Hot khi số con lớn trong cửa sổ đạt ngưỡng cấu hình.
+                {t('hotRegimeConfigDesc')}
               </p>
             </div>
 
