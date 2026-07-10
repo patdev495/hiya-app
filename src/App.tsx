@@ -541,10 +541,31 @@ export default function App() {
                       {GRID_ORDERED_OUTCOMES.map((outcome) => {
                         const color = OUTCOME_COLORS[outcome];
                         const isRecommendedTarget = modeSignal.targets?.includes(outcome) ?? false;
+                        const recommendedBet = config.useKellyCriterion ? modeSignal.recommendedBets?.[outcome] : undefined;
                         return (
-                          <div key={outcome} className={`rounded-lg border px-2 py-1.5 ${isRecommendedTarget ? 'border-indigo-500/50 bg-indigo-500/10' : 'border-slate-800 bg-slate-950/50'}`}>
-                            <div className={`text-[10px] font-mono font-bold ${color.text}`}>{outcome.toUpperCase()}</div>
-                            <div className="text-sm font-black text-white">{modePrediction.probabilities[outcome]}%</div>
+                          <div
+                            key={outcome}
+                            className={`rounded-lg border px-2 py-1.5 flex flex-col justify-between transition-all duration-200 ${
+                              isRecommendedTarget
+                                ? 'border-indigo-500/50 bg-indigo-500/10 shadow-[0_0_8px_rgba(99,102,241,0.1)]'
+                                : 'border-slate-800 bg-slate-950/50'
+                            }`}
+                          >
+                            <div>
+                              <div className="flex items-center justify-between gap-1">
+                                <span className={`text-[10px] font-mono font-bold ${color.text}`}>
+                                  {outcome.toUpperCase().replace('_', ' ')}
+                                </span>
+                                {recommendedBet !== undefined && (
+                                  <span className="text-[9px] font-black text-emerald-400 bg-emerald-500/15 px-1 py-0.5 rounded border border-emerald-500/20 font-mono">
+                                    {recommendedBet >= 1000 ? `${Math.round(recommendedBet / 1000)}k` : recommendedBet}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-sm font-black text-white mt-0.5">
+                                {modePrediction.probabilities[outcome]}%
+                              </div>
+                            </div>
                           </div>
                         );
                       })}
