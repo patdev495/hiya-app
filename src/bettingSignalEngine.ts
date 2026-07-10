@@ -218,7 +218,7 @@ export const calculateKellyBets = (
         }
       }
 
-      const betAmount = Math.round(bankroll * f * kellyMultiplier * rtpScale);
+      const betAmount = Math.floor((bankroll * f * kellyMultiplier * rtpScale) / 10) * 10;
       if (betAmount > 0) {
         bets[o] = betAmount;
       }
