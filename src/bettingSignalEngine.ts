@@ -1,5 +1,5 @@
 import { ALL_OUTCOMES, calculatePrediction, MULTIPLIERS } from './predictionEngine';
-import type { BacktestSummary, BettingAction, BettingCandidate, BettingSignal, Config, Outcome, PredictionMode, PredictionResult, StakeLevel, TargetTier } from './types';
+import type { BacktestSummary, BettingCandidate, BettingSignal, Config, Outcome, PredictionMode, PredictionResult } from './types';
 
 const DEFAULT_SAFETY_MARGIN = 0.5;
 
