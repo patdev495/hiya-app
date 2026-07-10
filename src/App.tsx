@@ -1148,6 +1148,20 @@ export default function App() {
                   <div className="text-slate-500">{language === 'en' ? 'Max Loss Streak' : 'Chuỗi thua max'}</div>
                   <div className="text-xl font-black text-rose-400">💀 {backtestSummary.maxConsecutiveLosses || 0}</div>
                 </div>
+                <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-3 col-span-2">
+                  <div className="text-slate-500">{t('currentStreak')}</div>
+                  <div className={`text-xl font-black ${
+                    backtestSummary.currentWinStreak > 0
+                      ? 'text-emerald-400'
+                      : backtestSummary.currentLossStreak > 0
+                        ? 'text-rose-400'
+                        : 'text-slate-400'
+                  }`}>
+                    {backtestSummary.currentWinStreak > 0 && `${t('currentWinStreak')} ${backtestSummary.currentWinStreak}`}
+                    {backtestSummary.currentLossStreak > 0 && `${t('currentLoseStreak')} ${backtestSummary.currentLossStreak}`}
+                    {backtestSummary.currentWinStreak === 0 && backtestSummary.currentLossStreak === 0 && t('noCurrentStreak')}
+                  </div>
+                </div>
               </div>
               <div className="mt-4 space-y-2">
                 {Object.entries(backtestSummary.hitsByTarget).length === 0 ? (

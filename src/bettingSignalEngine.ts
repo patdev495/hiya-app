@@ -364,6 +364,7 @@ export const calculateBacktest = (
       targetStats.hitRate = Math.round((targetStats.hits / targetStats.attempts) * 10000) / 100;
       summary.hitsByTarget[target] = targetStats;
     }
+
   }
 
   summary.estimatedReturn = Math.round(summary.estimatedReturn * 100) / 100;

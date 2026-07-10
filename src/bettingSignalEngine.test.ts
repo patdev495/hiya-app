@@ -236,6 +236,28 @@ describe('Betting Signal Engine', () => {
     expect(signal.adaptiveSafetyMargin).toBe(0.5);
   });
 
+  it('tracks the current consecutive winning streak through the latest resolved bet', () => {
+    const history: Outcome[] = Array(12).fill(['x10', 'x15']).flat() as Outcome[];
+
+    const summary = calculateBacktest(history, DEFAULT_CONFIG);
+
+    expect(summary.currentWinStreak).toBe(21);
+    expect(summary.currentLossStreak).toBe(0);
+  });
+
+  it('tracks the current consecutive losing streak at the end of the recorded history', () => {
+    const history: Outcome[] = [
+      ...Array(15).fill('x10'),
+      'x5_1',
+      'x5_2',
+      'x5_3',
+    ];
+
+    const summary = calculateBacktest(history, DEFAULT_CONFIG);
+
+    expect(summary.currentWinStreak).toBe(0);
+    expect(summary.currentLossStreak).toBe(3);
+  });
   it('supports auto mode switching to select the mode with highest recent backtest return', () => {
     // Create a history of 32 spins that is highly cyclical (offsets of +1 forward).
     // This will perform extremely well in relative mode, but poorly in decay mode.

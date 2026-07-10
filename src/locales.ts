@@ -110,6 +110,10 @@ export const translations = {
     skippedSpins: 'Skipped',
     normalSignals: 'Normal',
     estimatedReturn: 'Est. Return',
+    currentStreak: 'Current Streak',
+    currentWinStreak: 'WIN',
+    currentLoseStreak: 'LOSE',
+    noCurrentStreak: 'No bets yet',
     noBacktestSignals: 'No betting signals yet',
     displacementLabels: {
       stay: 'Stay',
@@ -252,6 +256,10 @@ export const translations = {
     skippedSpins: 'Bỏ qua',
     normalSignals: 'Lệnh chính',
     estimatedReturn: 'Lời ước tính',
+    currentStreak: 'Chuỗi hiện tại',
+    currentWinStreak: 'THẮNG',
+    currentLoseStreak: 'THUA',
+    noCurrentStreak: 'Chưa có lượt đặt',
     noBacktestSignals: 'Chưa có tín hiệu đặt',
     displacementLabels: {
       stay: 'Đứng im',
