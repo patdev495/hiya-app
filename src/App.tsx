@@ -346,33 +346,34 @@ export default function App() {
       <div className="absolute top-10 right-1/4 w-96 h-96 bg-fuchsia-600/10 rounded-full blur-[128px] pointer-events-none" />
 
       {/* Main Container */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
 
         {/* Header */}
-        <header className="flex flex-col md:flex-row md:items-center md:justify-between border-b border-slate-800/80 pb-6 mb-8 gap-4">
+        <header className="flex flex-col md:flex-row md:items-center md:justify-between border-b border-slate-800/80 pb-3 mb-4 gap-4">
           <div>
-            <div className="flex items-center gap-2">
-              <span className="flex h-2 w-2 relative">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
-              </span>
-              <span className="text-xs font-semibold tracking-widest text-indigo-400 uppercase">{t('liveSystem')}</span>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5">
+                <span className="flex h-1.5 w-1.5 relative">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-indigo-500"></span>
+                </span>
+                <span className="text-[10px] font-bold tracking-wider text-indigo-400 uppercase">{t('liveSystem')}</span>
+              </div>
+              
+              <div
+                data-layout="hot-regime-header"
+                className={`inline-flex items-center gap-1.5 rounded-lg border px-2 py-0.5 text-[10px] font-bold ${isHotRegime
+                    ? 'border-rose-500/40 bg-rose-500/10 text-rose-300'
+                    : 'border-blue-500/40 bg-blue-500/10 text-blue-300'
+                  }`}
+              >
+                <span>{isHotRegime ? t('hotRegime') : t('coldRegime')}</span>
+                <span className="font-mono">{regimeLargeCount}/{regimeWindow}</span>
+                <span className="text-slate-500">≥ {regimeThreshold}</span>
+              </div>
             </div>
-            <h1 className="text-3xl font-extrabold tracking-tight text-white mt-1">{t('title')}</h1>
-            <p className="text-slate-400 text-sm mt-1">
-              {t('subtitle')}
-            </p>
-            <div
-              data-layout="hot-regime-header"
-              className={`mt-3 inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-bold ${isHotRegime
-                  ? 'border-rose-500/40 bg-rose-500/10 text-rose-300'
-                  : 'border-blue-500/40 bg-blue-500/10 text-blue-300'
-                }`}
-            >
-              <span>{isHotRegime ? t('hotRegime') : t('coldRegime')}</span>
-              <span className="font-mono">{regimeLargeCount}/{regimeWindow}</span>
-              <span className="text-slate-500">≥ {regimeThreshold}</span>
-            </div>
+            
+            <h1 className="text-2xl font-black tracking-tight text-white mt-1.5">{t('title')}</h1>
           </div>
 
           <div className="flex items-center gap-3">
