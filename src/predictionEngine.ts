@@ -356,9 +356,12 @@ export const calculatePrediction = (
       }
     }
 
+    const patternStrength = config.patternStrength ?? 1;
+    const adjustedSupportWeight = supportWeight * patternStrength;
     for (const outcome of ALL_OUTCOMES) {
-      pRawOutcomes[outcome] = supportWeight + config.priorStrength > 0
-        ? (weightedCounts[outcome] + config.priorStrength * baseProbs[outcome]) / (supportWeight + config.priorStrength)
+      const adjustedWeightedCount = weightedCounts[outcome] * patternStrength;
+      pRawOutcomes[outcome] = adjustedSupportWeight + config.priorStrength > 0
+        ? (adjustedWeightedCount + config.priorStrength * baseProbs[outcome]) / (adjustedSupportWeight + config.priorStrength)
         : baseProbs[outcome];
     }
 

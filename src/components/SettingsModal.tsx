@@ -409,6 +409,32 @@ export default function SettingsModal({
               </div>
             </div>
 
+            {config.predictionMode === 'pattern' && (
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                    {t('patternStrength')}
+                  </label>
+                  <span className="text-xs font-mono font-bold text-indigo-400">{config.patternStrength ?? 3}x</span>
+                </div>
+                <input
+                  type="range"
+                  min="1"
+                  max="5"
+                  step="1"
+                  value={config.patternStrength ?? 3}
+                  onChange={(e) =>
+                    onConfigChange({ ...config, patternStrength: parseInt(e.target.value) })
+                  }
+                  className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                />
+                <div className="flex justify-between text-[10px] text-slate-500 mt-1">
+                  <span>1x ({t('weakPattern')})</span>
+                  <span>5x ({t('strongPattern')})</span>
+                </div>
+              </div>
+            )}
+
             {/* Markov Order */}
             <div>
               <div className="flex justify-between items-center mb-1">

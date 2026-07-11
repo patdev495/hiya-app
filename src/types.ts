@@ -6,6 +6,7 @@ export interface Config {
   historyWindow: number;
   maxOrder: number;
   priorStrength: number;
+  patternStrength?: number;
   minSupport: number;
   predictionMode: PredictionMode;
   useRegimeAdjuster: boolean;

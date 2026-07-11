@@ -282,6 +282,34 @@ describe('Prediction Engine', () => {
     expect(mainProbability).toBeGreaterThan(result.probabilities.x5_1 + result.probabilities.x5_2);
   });
 
+  it('should make pattern mode more decisive when pattern strength is higher', () => {
+    const history: Outcome[] = [
+      'x5_1', 'x5_2', 'x45',
+      'x5_2', 'x5_3', 'x45',
+      'x5_3', 'x5_4', 'x45',
+      'x5_1', 'x5_3', 'x10',
+      'x5_2', 'x5_4', 'x10',
+      'x5_1', 'x5_3',
+    ];
+    const weak = calculatePrediction(history, {
+      ...DEFAULT_CONFIG,
+      predictionMode: 'pattern',
+      priorStrength: 20,
+      patternStrength: 1,
+    });
+    const strong = calculatePrediction(history, {
+      ...DEFAULT_CONFIG,
+      predictionMode: 'pattern',
+      priorStrength: 20,
+      patternStrength: 5,
+    });
+
+    expect(strong.probabilities.x10).toBeGreaterThan(weak.probabilities.x10);
+    expect(strong.probabilities.x10 - strong.probabilities.x45).toBeGreaterThan(
+      weak.probabilities.x10 - weak.probabilities.x45
+    );
+  });
+
   it('should damp or boost probabilities based on deck exhaustion when enabled', () => {
     const configWithDeck: Config = { ...DEFAULT_CONFIG, useDeckAdjuster: true, deckSize: 100 };
 

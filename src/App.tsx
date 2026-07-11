@@ -38,6 +38,7 @@ const DEFAULT_CONFIG: Config = {
   historyWindow: 100,
   maxOrder: 2,
   priorStrength: 20,
+  patternStrength: 3,
   minSupport: 5,
   predictionMode: 'relative',
   useRegimeAdjuster: true,
@@ -111,6 +112,9 @@ export default function App() {
         }
         if (parsed.useRegimeAdjuster === undefined) {
           parsed.useRegimeAdjuster = false;
+        }
+        if (parsed.patternStrength === undefined) {
+          parsed.patternStrength = 3;
         }
         if (parsed.decayFactor === undefined) {
           parsed.decayFactor = 0.95;
