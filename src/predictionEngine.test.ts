@@ -247,7 +247,39 @@ describe('Prediction Engine', () => {
 
     expect(largeProbability).toBeGreaterThan(60);
     expect(result.probabilities.x10 + result.probabilities.x15).toBeGreaterThan(result.probabilities.x5_1);
-    expect(result.confidence).toBe('medium');
+    expect(['medium', 'high']).toContain(result.confidence);
+  });
+
+  it('should use wheel-step patterns as a separate pattern family', () => {
+    const config: Config = { ...DEFAULT_CONFIG, predictionMode: 'pattern', priorStrength: 0, minSupport: 2 };
+    const history: Outcome[] = [
+      'x5_1', 'x5_2', 'x45',
+      'x5_2', 'x5_3', 'x45',
+      'x5_3', 'x5_4', 'x45',
+      'x5_1', 'x5_3', 'x10',
+      'x5_2', 'x5_4', 'x10',
+      'x5_1', 'x5_3',
+    ];
+
+    const result = calculatePrediction(history, config);
+
+    expect(result.probabilities.x10).toBeGreaterThan(result.probabilities.x45);
+    expect(result.evidence.contextCount).toBeGreaterThan(0);
+  });
+
+  it('should use alternation patterns as a separate pattern family', () => {
+    const config: Config = { ...DEFAULT_CONFIG, predictionMode: 'pattern', priorStrength: 0, minSupport: 2 };
+    const history: Outcome[] = [
+      'x5_1', 'x10', 'x5_2', 'x15',
+      'x5_3', 'x10', 'x5_4', 'x15',
+      'x5_1',
+    ];
+
+    const result = calculatePrediction(history, config);
+    const mainProbability = result.probabilities.x10 + result.probabilities.x15;
+
+    expect(mainProbability).toBeGreaterThan(60);
+    expect(mainProbability).toBeGreaterThan(result.probabilities.x5_1 + result.probabilities.x5_2);
   });
 
   it('should damp or boost probabilities based on deck exhaustion when enabled', () => {

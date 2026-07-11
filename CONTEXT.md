@@ -82,7 +82,9 @@ The highlighted outcome should be described as the current highest-probability o
 
 ### Pattern Mode
 
-Pattern mode predicts from abstract recent-history shapes such as outcome tier, large-outcome gap, and payout regime instead of requiring an exact repeated outcome sequence.
+Pattern mode predicts from an ensemble of abstract recent-history pattern families instead of requiring an exact repeated outcome sequence.
+
+The pattern families include tier transitions, tier/gap buckets, regime/gap buckets, wheel-step movement, tier alternation, exact-outcome gap buckets, and exact-outcome direction. Each family contributes a weighted probability distribution so broad pattern families cannot dominate only because they match more historical positions.
 
 Pattern mode replaces global decay as the third prediction mode.
 

@@ -106,13 +106,29 @@ const countContext = (
 // Count occurrences of context and its transitions in relative offset history
 
 type PatternTier = 'small' | 'main' | 'rare';
+type PatternDirection = 'up' | 'down' | 'same';
+type WheelDirection = 'forward' | 'backward' | 'stay' | 'half';
+type GapBucket = 'short' | 'medium' | 'long';
+type AlternationState = 'alternating' | 'repeating' | 'mixed';
 
 type PatternState = {
+  lastOutcome: Outcome;
+  previousOutcome: Outcome;
   lastTier: PatternTier;
   previousTier: PatternTier;
-  tierDirection: 'up' | 'down' | 'same';
+  tierDirection: PatternDirection;
   regime: 'hot' | 'cold';
-  largeGap: 'short' | 'medium' | 'long';
+  largeGap: GapBucket;
+  exactGap: GapBucket;
+  wheelDirection: WheelDirection;
+  wheelShift: number;
+  alternation: AlternationState;
+};
+
+type PatternFamily = {
+  name: string;
+  weight: number;
+  serialize: (state: PatternState) => string;
 };
 
 const getPatternTier = (outcome: Outcome): PatternTier => {
@@ -129,11 +145,25 @@ const getTierRank = (tier: PatternTier): number => {
   return 2;
 };
 
-const getLargeGapBucket = (history: Outcome[]): PatternState['largeGap'] => {
-  const lastLargeIndex = [...history].reverse().findIndex((outcome) => !outcome.startsWith('x5_'));
-  const gap = lastLargeIndex === -1 ? history.length : lastLargeIndex;
+const getGapBucket = (gap: number): GapBucket => {
   if (gap <= 2) return 'short';
   if (gap <= 6) return 'medium';
+  return 'long';
+};
+
+const getLargeGapBucket = (history: Outcome[]): GapBucket => {
+  const lastLargeIndex = [...history].reverse().findIndex((outcome) => !outcome.startsWith('x5_'));
+  return getGapBucket(lastLargeIndex === -1 ? history.length : lastLargeIndex);
+};
+
+const getExactGapBucket = (history: Outcome[]): GapBucket => {
+  const lastOutcome = history[history.length - 1];
+  for (let index = history.length - 2; index >= 0; index--) {
+    if (history[index] === lastOutcome) {
+      return getGapBucket(history.length - 1 - index);
+    }
+  }
+
   return 'long';
 };
 
@@ -145,39 +175,99 @@ const getPatternRegime = (history: Outcome[], config: Config): PatternState['reg
   return largeCount >= Math.min(threshold, Math.max(1, Math.ceil(windowSize / 3))) ? 'hot' : 'cold';
 };
 
+const getWheelShift = (previousOutcome: Outcome, lastOutcome: Outcome): number => {
+  const previousIndex = ALL_OUTCOMES.indexOf(previousOutcome);
+  const lastIndex = ALL_OUTCOMES.indexOf(lastOutcome);
+  return (lastIndex - previousIndex + ALL_OUTCOMES.length) % ALL_OUTCOMES.length;
+};
+
+const getWheelDirection = (shift: number): WheelDirection => {
+  if (shift === 0) return 'stay';
+  if (shift === 4) return 'half';
+  return shift <= 3 ? 'forward' : 'backward';
+};
+
+const getAlternationState = (history: Outcome[]): AlternationState => {
+  if (history.length < 4) {
+    return 'mixed';
+  }
+
+  const tiers = history.slice(-4).map(getPatternTier);
+  const isAlternating = tiers.every((tier, index) => index < 2 || tier === tiers[index - 2])
+    && tiers[0] !== tiers[1];
+  if (isAlternating) {
+    return 'alternating';
+  }
+
+  return tiers.every((tier) => tier === tiers[0]) ? 'repeating' : 'mixed';
+};
+
 const getPatternState = (history: Outcome[], config: Config): PatternState | null => {
   if (history.length < 2) {
     return null;
   }
 
-  const previousTier = getPatternTier(history[history.length - 2]);
-  const lastTier = getPatternTier(history[history.length - 1]);
+  const previousOutcome = history[history.length - 2];
+  const lastOutcome = history[history.length - 1];
+  const previousTier = getPatternTier(previousOutcome);
+  const lastTier = getPatternTier(lastOutcome);
   const previousRank = getTierRank(previousTier);
   const lastRank = getTierRank(lastTier);
   const tierDirection = lastRank > previousRank ? 'up' : lastRank < previousRank ? 'down' : 'same';
+  const wheelShift = getWheelShift(previousOutcome, lastOutcome);
 
   return {
+    lastOutcome,
+    previousOutcome,
     lastTier,
     previousTier,
     tierDirection,
     regime: getPatternRegime(history, config),
     largeGap: getLargeGapBucket(history),
+    exactGap: getExactGapBucket(history),
+    wheelDirection: getWheelDirection(wheelShift),
+    wheelShift,
+    alternation: getAlternationState(history),
   };
 };
 
-const serializePatternState = (state: PatternState): string => [
-  state.lastTier,
-  state.previousTier,
-  state.tierDirection,
-  state.regime,
-  state.largeGap,
-].join('|');
-
-const serializeLoosePatternState = (state: PatternState): string => [
-  state.lastTier,
-  state.previousTier,
-  state.largeGap,
-].join('|');
+const PATTERN_FAMILIES: PatternFamily[] = [
+  {
+    name: 'tier-transition',
+    weight: 1.1,
+    serialize: (state) => ['tier', state.previousTier, state.lastTier, state.tierDirection].join('|'),
+  },
+  {
+    name: 'tier-gap',
+    weight: 0.9,
+    serialize: (state) => ['tier-gap', state.lastTier, state.largeGap].join('|'),
+  },
+  {
+    name: 'regime-gap',
+    weight: 0.7,
+    serialize: (state) => ['regime-gap', state.regime, state.largeGap].join('|'),
+  },
+  {
+    name: 'wheel-step',
+    weight: 3.2,
+    serialize: (state) => ['wheel-step', state.wheelShift, state.previousTier, state.lastTier].join('|'),
+  },
+  {
+    name: 'alternation',
+    weight: 0.8,
+    serialize: (state) => ['alternation', state.alternation, state.lastTier].join('|'),
+  },
+  {
+    name: 'exact-gap',
+    weight: 0.6,
+    serialize: (state) => ['exact-gap', state.lastOutcome, state.exactGap].join('|'),
+  },
+  {
+    name: 'exact-direction',
+    weight: 1.2,
+    serialize: (state) => ['exact-direction', state.previousOutcome, state.wheelShift].join('|'),
+  },
+];
 
 const countOffsetContext = (
   offsets: number[],
@@ -226,54 +316,58 @@ export const calculatePrediction = (
   let directional: { direction: 'forward' | 'backward' | 'stay' | 'half'; minSteps: number } | undefined;
 
   if (mode === 'pattern') {
-    // --- ABSTRACT PATTERN MODE ---
+    // --- ABSTRACT PATTERN ENSEMBLE MODE ---
     const currentState = getPatternState(activeHistory, config);
-    const matchedCounts: Record<Outcome, number> = {} as any;
+    const weightedCounts: Record<Outcome, number> = {} as any;
     for (const outcome of ALL_OUTCOMES) {
-      matchedCounts[outcome] = 0;
+      weightedCounts[outcome] = 0;
     }
 
-    let matchedPatternCount = 0;
-    const matchPattern = (serialize: (state: PatternState) => string): number => {
-      if (!currentState) {
-        return 0;
-      }
+    let supportWeight = 0;
+    let rawMatchCount = 0;
+    if (currentState) {
+      for (const family of PATTERN_FAMILIES) {
+        const currentSignature = family.serialize(currentState);
+        const familyCounts: Record<Outcome, number> = {} as any;
+        for (const outcome of ALL_OUTCOMES) {
+          familyCounts[outcome] = 0;
+        }
 
-      const currentSignature = serialize(currentState);
-      let matchCount = 0;
-      for (let i = 2; i < activeHistory.length; i++) {
-        const state = getPatternState(activeHistory.slice(0, i), config);
-        if (!state || serialize(state) !== currentSignature) {
+        let familyMatches = 0;
+        for (let index = 2; index < activeHistory.length; index++) {
+          const state = getPatternState(activeHistory.slice(0, index), config);
+          if (!state || family.serialize(state) !== currentSignature) {
+            continue;
+          }
+
+          familyMatches++;
+          familyCounts[activeHistory[index]]++;
+        }
+
+        if (familyMatches === 0) {
           continue;
         }
 
-        matchCount++;
-        matchedCounts[activeHistory[i]]++;
+        rawMatchCount += familyMatches;
+        supportWeight += family.weight;
+        for (const outcome of ALL_OUTCOMES) {
+          weightedCounts[outcome] += family.weight * (familyCounts[outcome] / familyMatches);
+        }
       }
-      return matchCount;
-    };
-
-    matchedPatternCount = matchPattern(serializePatternState);
-    if (matchedPatternCount < Math.max(1, Math.floor(config.minSupport / 2))) {
-      for (const outcome of ALL_OUTCOMES) {
-        matchedCounts[outcome] = 0;
-      }
-      matchedPatternCount = matchPattern(serializeLoosePatternState);
     }
 
-    const total = matchedPatternCount;
     for (const outcome of ALL_OUTCOMES) {
-      pRawOutcomes[outcome] = total + config.priorStrength > 0
-        ? (matchedCounts[outcome] + config.priorStrength * baseProbs[outcome]) / (total + config.priorStrength)
+      pRawOutcomes[outcome] = supportWeight + config.priorStrength > 0
+        ? (weightedCounts[outcome] + config.priorStrength * baseProbs[outcome]) / (supportWeight + config.priorStrength)
         : baseProbs[outcome];
     }
 
     finalContext = activeHistory.slice(-2);
-    finalContextCount = matchedPatternCount;
-    matchedOrder = currentState ? 1 : 0;
-    confidence = matchedPatternCount >= config.minSupport * 2
+    finalContextCount = rawMatchCount;
+    matchedOrder = currentState ? PATTERN_FAMILIES.length : 0;
+    confidence = supportWeight >= config.minSupport * 3
       ? 'high'
-      : matchedPatternCount >= Math.max(1, Math.floor(config.minSupport / 2))
+      : supportWeight >= Math.max(1, config.minSupport)
         ? 'medium'
         : 'low';
   } else if (mode === 'absolute') {
