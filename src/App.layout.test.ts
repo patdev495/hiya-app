@@ -54,6 +54,14 @@ describe('App layout', () => {
     expect(modeCardSource).toContain('modeStreakBacktest.currentLossStreak');
   });
 
+  it('exposes prediction mode and pattern strength inside settings', () => {
+    expect(settingsSource).toContain('data-layout="settings-prediction-mode"');
+    expect(settingsSource).toContain("const predictionModes: PredictionMode[] = ['absolute', 'relative', 'pattern']");
+    expect(settingsSource).toContain("{t('predMode')}");
+    expect(settingsSource).toContain('data-layout="settings-pattern-strength"');
+    expect(settingsSource).not.toContain("{config.predictionMode === 'pattern' && (\n              <div>\n                <div className=\"flex justify-between items-center mb-1\">");
+  });
+
   it('allows the automatic evaluation window to start at one turn', () => {
     const labelIndex = settingsSource.indexOf("{t('autoModeWindowLabel')}");
     const nextRangeIndex = settingsSource.indexOf('type="range"', labelIndex);

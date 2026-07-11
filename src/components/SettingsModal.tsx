@@ -1,4 +1,4 @@
-import type { Config } from '../types';
+import type { Config, PredictionMode } from '../types';
 import type { Language } from '../locales';
 import { ALL_OUTCOMES } from '../predictionEngine';
 import type { DeckWindowStats } from '../types';
@@ -32,6 +32,13 @@ export default function SettingsModal({
   onClearHistory,
   historyLength,
 }: SettingsModalProps) {
+  const predictionModes: PredictionMode[] = ['absolute', 'relative', 'pattern'];
+  const getModeLabel = (mode: PredictionMode) => {
+    if (mode === 'absolute') return t('modeAbsolute');
+    if (mode === 'relative') return t('modeRelative');
+    return t('modePattern');
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -111,6 +118,38 @@ export default function SettingsModal({
               </div>
             </div>
 
+            {/* Prediction Mode */}
+            <div data-layout="settings-prediction-mode">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">
+                  {t('predMode')}
+                </label>
+                {config.useAutoModeSwitch && (
+                  <span className="text-[10px] text-amber-300 font-bold bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                    AUTO
+                  </span>
+                )}
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {predictionModes.map((mode) => (
+                  <button
+                    key={mode}
+                    onClick={() => onConfigChange({ ...config, predictionMode: mode })}
+                    className={`py-2.5 px-3 text-xs font-bold rounded-lg border transition-all cursor-pointer text-left ${
+                      config.predictionMode === mode
+                        ? 'bg-indigo-600 border-indigo-500 text-white font-black'
+                        : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-400'
+                    }`}
+                  >
+                    {getModeLabel(mode)}
+                  </button>
+                ))}
+              </div>
+              {config.useAutoModeSwitch && (
+                <p className="text-[10px] text-slate-500 mt-2">{t('autoModeSwitchDesc')}</p>
+              )}
+            </div>
+
             {/* Pattern mode note */}
             {config.predictionMode === 'pattern' && (
               <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-3 text-xs leading-relaxed text-slate-400">
@@ -187,8 +226,8 @@ export default function SettingsModal({
                     onConfigChange({ ...config, deckSize: parseInt(e.target.value) })
                   }
                   className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
-                />
-                <div className="flex justify-between text-[10px] text-slate-500 mt-1">
+              />
+              <div className="flex justify-between text-[10px] text-slate-500 mt-1">
                   <span>100 {t('deckSpins')}</span>
                   <span>5000 {t('deckSpins')}</span>
                 </div>
@@ -409,15 +448,14 @@ export default function SettingsModal({
               </div>
             </div>
 
-            {config.predictionMode === 'pattern' && (
-              <div>
-                <div className="flex justify-between items-center mb-1">
-                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                    {t('patternStrength')}
-                  </label>
-                  <span className="text-xs font-mono font-bold text-indigo-400">{config.patternStrength ?? 3}x</span>
-                </div>
-                <input
+            <div data-layout="settings-pattern-strength">
+              <div className="flex justify-between items-center mb-1">
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                  {t('patternStrength')}
+                </label>
+                <span className="text-xs font-mono font-bold text-indigo-400">{config.patternStrength ?? 3}x</span>
+              </div>
+              <input
                   type="range"
                   min="1"
                   max="5"
@@ -429,11 +467,10 @@ export default function SettingsModal({
                   className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
                 />
                 <div className="flex justify-between text-[10px] text-slate-500 mt-1">
-                  <span>1x ({t('weakPattern')})</span>
-                  <span>5x ({t('strongPattern')})</span>
-                </div>
+                <span>1x ({t('weakPattern')})</span>
+                <span>5x ({t('strongPattern')})</span>
               </div>
-            )}
+            </div>
 
             {/* Markov Order */}
             <div>
