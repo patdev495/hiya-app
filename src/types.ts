@@ -36,6 +36,7 @@ export interface PredictionResult {
     activeContext: Outcome[];
     contextCount: number;
     matchedOrder: number;
+    patternFamilies?: PatternFamilyEvidence[];
   };
   directional?: {
     direction: 'forward' | 'backward' | 'stay' | 'half';
@@ -45,6 +46,16 @@ export interface PredictionResult {
   largeCount?: number;
   regimeWindow?: number;
   regimeThreshold?: number;
+}
+
+export interface PatternFamilyEvidence {
+  name: string;
+  signature: string;
+  matches: number;
+  weight: number;
+  contribution: number;
+  topOutcome: Outcome | null;
+  topProbability: number;
 }
 
 export interface HistoryItem {

@@ -84,7 +84,7 @@ The highlighted outcome should be described as the current highest-probability o
 
 Pattern mode predicts from an ensemble of abstract recent-history pattern families instead of requiring an exact repeated outcome sequence.
 
-The pattern families include tier transitions, tier/gap buckets, regime/gap buckets, wheel-step movement, tier alternation, exact-outcome gap buckets, and exact-outcome direction. Each family contributes a weighted probability distribution so broad pattern families cannot dominate only because they match more historical positions. Pattern strength multiplies this ensemble signal before it is blended with prior probability, making pattern mode more conservative at low values and more decisive at high values.
+The pattern families include tier transitions, tier/gap buckets, regime/gap buckets, wheel-step movement, tier alternation, exact-outcome gap buckets, and exact-outcome direction. Each family contributes a weighted probability distribution so broad pattern families cannot dominate only because they match more historical positions. Pattern strength multiplies this ensemble signal before it is blended with prior probability, making pattern mode more conservative at low values and more decisive at high values. Pattern evidence should expose matched families, match counts, top family outcome, and contribution so the user can see which abstract pattern is driving the choice.
 
 Pattern mode replaces global decay as the third prediction mode.
 

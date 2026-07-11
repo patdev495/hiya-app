@@ -310,6 +310,35 @@ describe('Prediction Engine', () => {
     );
   });
 
+  it('should expose pattern family evidence when pattern mode is active', () => {
+    const config: Config = {
+      ...DEFAULT_CONFIG,
+      predictionMode: 'pattern',
+      priorStrength: 20,
+      patternStrength: 3,
+      minSupport: 2,
+    };
+    const history: Outcome[] = [
+      'x5_1', 'x5_2', 'x45',
+      'x5_2', 'x5_3', 'x45',
+      'x5_3', 'x5_4', 'x45',
+      'x5_1', 'x5_3', 'x10',
+      'x5_2', 'x5_4', 'x10',
+      'x5_1', 'x5_3',
+    ];
+
+    const result = calculatePrediction(history, config);
+    const families = result.evidence.patternFamilies ?? [];
+    const wheelStep = families.find((family) => family.name === 'wheel-step');
+
+    expect(families.length).toBeGreaterThan(0);
+    expect(wheelStep).toBeDefined();
+    expect(wheelStep?.matches).toBeGreaterThan(0);
+    expect(wheelStep?.topOutcome).toBe('x10');
+    expect(wheelStep?.contribution).toBeGreaterThan(0);
+    expect(families[0].contribution).toBeGreaterThanOrEqual(families[families.length - 1].contribution);
+  });
+
   it('should damp or boost probabilities based on deck exhaustion when enabled', () => {
     const configWithDeck: Config = { ...DEFAULT_CONFIG, useDeckAdjuster: true, deckSize: 100 };
 

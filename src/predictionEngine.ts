@@ -1,4 +1,4 @@
-import type { DeckWindowStats, Outcome, Config, PredictionResult } from './types';
+import type { DeckWindowStats, Outcome, Config, PredictionResult, PatternFamilyEvidence } from './types';
 
 export const ALL_OUTCOMES: Outcome[] = [
   'x5_1',
@@ -314,6 +314,7 @@ export const calculatePrediction = (
   let finalContextCount = 0;
   let matchedOrder = 0;
   let directional: { direction: 'forward' | 'backward' | 'stay' | 'half'; minSteps: number } | undefined;
+  let patternFamilies: PatternFamilyEvidence[] | undefined;
 
   if (mode === 'pattern') {
     // --- ABSTRACT PATTERN ENSEMBLE MODE ---
@@ -325,6 +326,7 @@ export const calculatePrediction = (
 
     let supportWeight = 0;
     let rawMatchCount = 0;
+    const familyEvidence: PatternFamilyEvidence[] = [];
     if (currentState) {
       for (const family of PATTERN_FAMILIES) {
         const currentSignature = family.serialize(currentState);
@@ -350,13 +352,36 @@ export const calculatePrediction = (
 
         rawMatchCount += familyMatches;
         supportWeight += family.weight;
+        let topFamilyOutcome: Outcome | null = null;
+        let topFamilyProbability = 0;
         for (const outcome of ALL_OUTCOMES) {
-          weightedCounts[outcome] += family.weight * (familyCounts[outcome] / familyMatches);
+          const familyProbability = familyCounts[outcome] / familyMatches;
+          weightedCounts[outcome] += family.weight * familyProbability;
+          if (familyProbability > topFamilyProbability) {
+            topFamilyOutcome = outcome;
+            topFamilyProbability = familyProbability;
+          }
         }
+
+        familyEvidence.push({
+          name: family.name,
+          signature: currentSignature,
+          matches: familyMatches,
+          weight: family.weight,
+          contribution: 0,
+          topOutcome: topFamilyOutcome,
+          topProbability: Math.round(topFamilyProbability * 10000) / 100,
+        });
       }
     }
 
     const patternStrength = config.patternStrength ?? 1;
+    patternFamilies = familyEvidence
+      .map((family) => ({
+        ...family,
+        contribution: Math.round(family.weight * patternStrength * (family.topProbability / 100) * 100) / 100,
+      }))
+      .sort((a, b) => b.contribution - a.contribution || b.matches - a.matches);
     const adjustedSupportWeight = supportWeight * patternStrength;
     for (const outcome of ALL_OUTCOMES) {
       const adjustedWeightedCount = weightedCounts[outcome] * patternStrength;
@@ -632,7 +657,8 @@ export const calculatePrediction = (
     evidence: {
       activeContext: finalContext,
       contextCount: finalContextCount,
-      matchedOrder
+      matchedOrder,
+      patternFamilies
     },
     directional,
     regime,
