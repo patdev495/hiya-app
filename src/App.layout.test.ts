@@ -26,7 +26,7 @@ describe('App layout', () => {
     expect(historyPanelIndex).toBeGreaterThan(recordPanelIndex);
     expect(dashboardGridIndex).toBeGreaterThan(recordPanelIndex);
 
-    expect(appSource).toContain("const predictionModes: PredictionMode[] = ['absolute', 'relative', 'decay']");
+    expect(appSource).toContain("const predictionModes: PredictionMode[] = ['absolute', 'relative', 'pattern']");
     expect(modeCardSource).toContain('modePrediction.probabilities');
     expect(appSource).toContain('const modeSignal = modeSignals[mode];');
     expect(modeCardSource).toContain('const isRecommendedTarget = modeSignal.targets?.includes(outcome) ?? false;');

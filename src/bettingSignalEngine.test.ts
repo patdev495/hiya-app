@@ -281,7 +281,7 @@ describe('Betting Signal Engine', () => {
   });
   it('supports auto mode switching to select the mode with highest recent backtest return', () => {
     // Create a history of 32 spins that is highly cyclical (offsets of +1 forward).
-    // This will perform extremely well in relative mode, but poorly in decay mode.
+    // This will perform extremely well in relative mode, but poorly in pattern mode.
     const history: Outcome[] = [];
     const pattern: Outcome[] = ['x5_1', 'x5_2', 'x5_3', 'x5_4', 'x10', 'x15', 'x25', 'x45'];
     for (let i = 0; i < 4; i++) {
@@ -291,7 +291,7 @@ describe('Betting Signal Engine', () => {
     const config: Config = {
       ...DEFAULT_CONFIG,
       useAutoModeSwitch: true,
-      predictionMode: 'decay', // Start with decay mode, which should be overridden
+      predictionMode: 'pattern', // Start with pattern mode, which should be overridden
     };
 
     const prediction = calculatePrediction(history, config);
@@ -310,7 +310,7 @@ describe('Betting Signal Engine', () => {
     const config: Config = {
       ...DEFAULT_CONFIG,
       useAutoModeSwitch: true,
-      predictionMode: 'decay',
+      predictionMode: 'pattern',
       useRegimeAdjuster: true,
       useDeckAdjuster: true,
     };
@@ -344,19 +344,19 @@ describe('Betting Signal Engine', () => {
     const configDefault: Config = {
       ...DEFAULT_CONFIG,
       useAutoModeSwitch: true,
-      predictionMode: 'decay',
+      predictionMode: 'pattern',
       autoModeWindow: 30,
     };
 
     const predDefault = calculatePrediction(history, configDefault);
     const signalDefault = calculateBettingSignal(history, predDefault, configDefault);
     // Should NOT auto-switch since 24 < 30
-    expect(signalDefault.activeMode).toBe('decay');
+    expect(signalDefault.activeMode).toBe('pattern');
 
     const configCustom: Config = {
       ...DEFAULT_CONFIG,
       useAutoModeSwitch: true,
-      predictionMode: 'decay',
+      predictionMode: 'pattern',
       autoModeWindow: 20,
     };
 

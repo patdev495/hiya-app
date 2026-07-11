@@ -104,6 +104,81 @@ const countContext = (
 };
 
 // Count occurrences of context and its transitions in relative offset history
+
+type PatternTier = 'small' | 'main' | 'rare';
+
+type PatternState = {
+  lastTier: PatternTier;
+  previousTier: PatternTier;
+  tierDirection: 'up' | 'down' | 'same';
+  regime: 'hot' | 'cold';
+  largeGap: 'short' | 'medium' | 'long';
+};
+
+const getPatternTier = (outcome: Outcome): PatternTier => {
+  if (outcome.startsWith('x5_')) {
+    return 'small';
+  }
+
+  return outcome === 'x10' || outcome === 'x15' ? 'main' : 'rare';
+};
+
+const getTierRank = (tier: PatternTier): number => {
+  if (tier === 'small') return 0;
+  if (tier === 'main') return 1;
+  return 2;
+};
+
+const getLargeGapBucket = (history: Outcome[]): PatternState['largeGap'] => {
+  const lastLargeIndex = [...history].reverse().findIndex((outcome) => !outcome.startsWith('x5_'));
+  const gap = lastLargeIndex === -1 ? history.length : lastLargeIndex;
+  if (gap <= 2) return 'short';
+  if (gap <= 6) return 'medium';
+  return 'long';
+};
+
+const getPatternRegime = (history: Outcome[], config: Config): PatternState['regime'] => {
+  const windowSize = Math.min(config.hotRegimeWindow || 15, history.length);
+  const threshold = config.hotRegimeThreshold || 4;
+  const recent = history.slice(-windowSize);
+  const largeCount = recent.filter((outcome) => !outcome.startsWith('x5_')).length;
+  return largeCount >= Math.min(threshold, Math.max(1, Math.ceil(windowSize / 3))) ? 'hot' : 'cold';
+};
+
+const getPatternState = (history: Outcome[], config: Config): PatternState | null => {
+  if (history.length < 2) {
+    return null;
+  }
+
+  const previousTier = getPatternTier(history[history.length - 2]);
+  const lastTier = getPatternTier(history[history.length - 1]);
+  const previousRank = getTierRank(previousTier);
+  const lastRank = getTierRank(lastTier);
+  const tierDirection = lastRank > previousRank ? 'up' : lastRank < previousRank ? 'down' : 'same';
+
+  return {
+    lastTier,
+    previousTier,
+    tierDirection,
+    regime: getPatternRegime(history, config),
+    largeGap: getLargeGapBucket(history),
+  };
+};
+
+const serializePatternState = (state: PatternState): string => [
+  state.lastTier,
+  state.previousTier,
+  state.tierDirection,
+  state.regime,
+  state.largeGap,
+].join('|');
+
+const serializeLoosePatternState = (state: PatternState): string => [
+  state.lastTier,
+  state.previousTier,
+  state.largeGap,
+].join('|');
+
 const countOffsetContext = (
   offsets: number[],
   context: number[]
@@ -137,9 +212,8 @@ export const calculatePrediction = (
   const activeHistory = history.slice(-config.historyWindow);
   const m = activeHistory.length;
 
-  // If in relative mode, but we don't have enough history to compute transitions, fallback to absolute
-  const mode = config.predictionMode === 'decay' 
-    ? 'decay' 
+  const mode = config.predictionMode === 'pattern'
+    ? 'pattern'
     : (config.predictionMode === 'relative' && m >= 2) ? 'relative' : 'absolute';
 
   const baseProbs = getBaseProbabilities();
@@ -151,34 +225,57 @@ export const calculatePrediction = (
   let matchedOrder = 0;
   let directional: { direction: 'forward' | 'backward' | 'stay' | 'half'; minSteps: number } | undefined;
 
-  if (mode === 'decay') {
-    // --- EXPONENTIAL DECAY FREQUENCY MODE ---
-    const decayFactor = config.decayFactor !== undefined ? config.decayFactor : 0.95;
-    const weights: Record<Outcome, number> = {} as any;
-    for (const o of ALL_OUTCOMES) {
-      weights[o] = 0;
+  if (mode === 'pattern') {
+    // --- ABSTRACT PATTERN MODE ---
+    const currentState = getPatternState(activeHistory, config);
+    const matchedCounts: Record<Outcome, number> = {} as any;
+    for (const outcome of ALL_OUTCOMES) {
+      matchedCounts[outcome] = 0;
     }
 
-    const totalSpins = history.length;
-    for (let i = 0; i < totalSpins; i++) {
-      const outcome = history[i];
-      const distance = totalSpins - 1 - i;
-      weights[outcome] += Math.pow(decayFactor, distance);
+    let matchedPatternCount = 0;
+    const matchPattern = (serialize: (state: PatternState) => string): number => {
+      if (!currentState) {
+        return 0;
+      }
+
+      const currentSignature = serialize(currentState);
+      let matchCount = 0;
+      for (let i = 2; i < activeHistory.length; i++) {
+        const state = getPatternState(activeHistory.slice(0, i), config);
+        if (!state || serialize(state) !== currentSignature) {
+          continue;
+        }
+
+        matchCount++;
+        matchedCounts[activeHistory[i]]++;
+      }
+      return matchCount;
+    };
+
+    matchedPatternCount = matchPattern(serializePatternState);
+    if (matchedPatternCount < Math.max(1, Math.floor(config.minSupport / 2))) {
+      for (const outcome of ALL_OUTCOMES) {
+        matchedCounts[outcome] = 0;
+      }
+      matchedPatternCount = matchPattern(serializeLoosePatternState);
     }
 
-    let sumWeights = 0;
-    for (const o of ALL_OUTCOMES) {
-      sumWeights += weights[o];
+    const total = matchedPatternCount;
+    for (const outcome of ALL_OUTCOMES) {
+      pRawOutcomes[outcome] = total + config.priorStrength > 0
+        ? (matchedCounts[outcome] + config.priorStrength * baseProbs[outcome]) / (total + config.priorStrength)
+        : baseProbs[outcome];
     }
 
-    for (const o of ALL_OUTCOMES) {
-      pRawOutcomes[o] = (weights[o] + config.priorStrength * baseProbs[o]) / (sumWeights + config.priorStrength);
-    }
-
-    confidence = 'medium';
-    finalContext = totalSpins > 0 ? [history[totalSpins - 1]] : [];
-    finalContextCount = totalSpins;
-    matchedOrder = 0;
+    finalContext = activeHistory.slice(-2);
+    finalContextCount = matchedPatternCount;
+    matchedOrder = currentState ? 1 : 0;
+    confidence = matchedPatternCount >= config.minSupport * 2
+      ? 'high'
+      : matchedPatternCount >= Math.max(1, Math.floor(config.minSupport / 2))
+        ? 'medium'
+        : 'low';
   } else if (mode === 'absolute') {
     // --- ABSOLUTE MODE ---
     const overallCounts: Record<Outcome, number> = {} as any;

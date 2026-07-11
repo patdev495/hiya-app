@@ -111,30 +111,10 @@ export default function SettingsModal({
               </div>
             </div>
 
-            {/* Decay Factor (visible only in Decay mode) */}
-            {config.predictionMode === 'decay' && (
-              <div>
-                <div className="flex justify-between items-center mb-1">
-                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                    {t('decayFactorLabel')} (λ)
-                  </label>
-                  <span className="text-xs font-mono font-bold text-indigo-400">{config.decayFactor}</span>
-                </div>
-                <input
-                  type="range"
-                  min="0.80"
-                  max="0.99"
-                  step="0.01"
-                  value={config.decayFactor}
-                  onChange={(e) =>
-                    onConfigChange({ ...config, decayFactor: parseFloat(e.target.value) })
-                  }
-                  className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
-                />
-                <div className="flex justify-between text-[10px] text-slate-500 mt-1">
-                  <span>0.80 ({t('fastDecay')})</span>
-                  <span>0.99 ({t('slowDecay')})</span>
-                </div>
+            {/* Pattern mode note */}
+            {config.predictionMode === 'pattern' && (
+              <div className="rounded-lg border border-slate-800 bg-slate-950/50 p-3 text-xs leading-relaxed text-slate-400">
+                {t('patternDesc')}
               </div>
             )}
 

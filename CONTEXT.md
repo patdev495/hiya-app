@@ -80,6 +80,12 @@ Prediction output may highlight the outcome with the highest current probability
 
 The highlighted outcome should be described as the current highest-probability outcome, not as a guaranteed or certain next result.
 
+### Pattern Mode
+
+Pattern mode predicts from abstract recent-history shapes such as outcome tier, large-outcome gap, and payout regime instead of requiring an exact repeated outcome sequence.
+
+Pattern mode replaces global decay as the third prediction mode.
+
 ### Playable Outcome
 
 An outcome is playable only when its predicted probability exceeds its break-even probability by at least the configured safety margin.

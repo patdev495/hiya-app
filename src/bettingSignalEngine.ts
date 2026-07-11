@@ -163,7 +163,7 @@ export const selectActivePredictionMode = (
     return config.predictionMode;
   }
 
-  const modes: PredictionMode[] = ['absolute', 'relative', 'decay'];
+  const modes: PredictionMode[] = ['absolute', 'relative', 'pattern'];
   let bestMode = config.predictionMode;
   let bestReturn = -Infinity;
 

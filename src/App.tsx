@@ -106,6 +106,9 @@ export default function App() {
         if (!parsed.predictionMode) {
           parsed.predictionMode = 'absolute';
         }
+        if (parsed.predictionMode === 'decay') {
+          parsed.predictionMode = 'pattern';
+        }
         if (parsed.useRegimeAdjuster === undefined) {
           parsed.useRegimeAdjuster = false;
         }
@@ -218,22 +221,22 @@ export default function App() {
   const modeBacktests = {
     absolute: calculateBacktest(autoHistory, { ...config, predictionMode: 'absolute', useAutoModeSwitch: false, useAdaptiveSafety: false }),
     relative: calculateBacktest(autoHistory, { ...config, predictionMode: 'relative', useAutoModeSwitch: false, useAdaptiveSafety: false }),
-    decay: calculateBacktest(autoHistory, { ...config, predictionMode: 'decay', useAutoModeSwitch: false, useAdaptiveSafety: false }),
+    pattern: calculateBacktest(autoHistory, { ...config, predictionMode: 'pattern', useAutoModeSwitch: false, useAdaptiveSafety: false }),
   };
   const modeStreakBacktests = {
     absolute: calculateBacktest(historyOutcomes, { ...config, predictionMode: 'absolute', useAutoModeSwitch: false, useAdaptiveSafety: false }),
     relative: calculateBacktest(historyOutcomes, { ...config, predictionMode: 'relative', useAutoModeSwitch: false, useAdaptiveSafety: false }),
-    decay: calculateBacktest(historyOutcomes, { ...config, predictionMode: 'decay', useAutoModeSwitch: false, useAdaptiveSafety: false }),
+    pattern: calculateBacktest(historyOutcomes, { ...config, predictionMode: 'pattern', useAutoModeSwitch: false, useAdaptiveSafety: false }),
   };
   const modeReturns = {
     absolute: modeBacktests.absolute.estimatedReturn,
     relative: modeBacktests.relative.estimatedReturn,
-    decay: modeBacktests.decay.estimatedReturn,
+    pattern: modeBacktests.pattern.estimatedReturn,
   };
   const previousModeReturns = {
     absolute: calculateBacktest(previousAutoHistory, { ...config, predictionMode: 'absolute', useAutoModeSwitch: false, useAdaptiveSafety: false }).estimatedReturn,
     relative: calculateBacktest(previousAutoHistory, { ...config, predictionMode: 'relative', useAutoModeSwitch: false, useAdaptiveSafety: false }).estimatedReturn,
-    decay: calculateBacktest(previousAutoHistory, { ...config, predictionMode: 'decay', useAutoModeSwitch: false, useAdaptiveSafety: false }).estimatedReturn,
+    pattern: calculateBacktest(previousAutoHistory, { ...config, predictionMode: 'pattern', useAutoModeSwitch: false, useAdaptiveSafety: false }).estimatedReturn,
   };
 
   // If previewMode is active, override config for prediction and betting signal calculations.
@@ -272,7 +275,7 @@ export default function App() {
   // Split history into active (within window) and older
   const activeCount = prediction.activeHistory.length;
   const totalCount = history.length;
-  const predictionModes: PredictionMode[] = ['absolute', 'relative', 'decay'];
+  const predictionModes: PredictionMode[] = ['absolute', 'relative', 'pattern'];
   const bestModeReturn = Math.max(...predictionModes.map((mode) => modeReturns[mode]));
   const autoSelectedMode = bettingSignal.activeMode || config.predictionMode;
   const modePredictions = Object.fromEntries(

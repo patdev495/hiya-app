@@ -232,12 +232,22 @@ describe('Prediction Engine', () => {
     expect(resHotWithAdj.probabilities.x45).toBeGreaterThan(resHotNoAdj.probabilities.x45);
   });
 
-  it('should compute exponential decay probabilities correctly in decay mode', () => {
-    const config: Config = { ...DEFAULT_CONFIG, predictionMode: 'decay', decayFactor: 0.90, priorStrength: 0 };
-    const history: Outcome[] = ['x10', 'x45'];
+  it('should learn abstract tier patterns without requiring exact repeated values in pattern mode', () => {
+    const config: Config = { ...DEFAULT_CONFIG, predictionMode: 'pattern', priorStrength: 0, minSupport: 2 };
+    const history: Outcome[] = [
+      'x5_1', 'x10', 'x5_2',
+      'x5_3', 'x15', 'x5_4',
+      'x5_2', 'x10', 'x5_3',
+      'x5_4', 'x15', 'x5_1',
+      'x5_2',
+    ];
+
     const result = calculatePrediction(history, config);
-    expect(result.probabilities.x45).toBeGreaterThan(result.probabilities.x10);
-    expect(result.probabilities.x15).toBe(0);
+    const largeProbability = result.probabilities.x10 + result.probabilities.x15 + result.probabilities.x25 + result.probabilities.x45;
+
+    expect(largeProbability).toBeGreaterThan(60);
+    expect(result.probabilities.x10 + result.probabilities.x15).toBeGreaterThan(result.probabilities.x5_1);
+    expect(result.confidence).toBe('medium');
   });
 
   it('should damp or boost probabilities based on deck exhaustion when enabled', () => {
