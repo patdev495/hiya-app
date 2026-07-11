@@ -2,18 +2,75 @@ import { ALL_OUTCOMES, calculatePrediction, MULTIPLIERS } from './predictionEngi
 import type { BacktestSummary, BettingCandidate, BettingSignal, Config, Outcome, PredictionMode, PredictionResult } from './types';
 
 const DEFAULT_SAFETY_MARGIN = 0.5;
+const STRONG_EDGE_MARGIN = 3;
+const COOLDOWN_LOSS_TRIGGER = 3;
+const COOLDOWN_SPINS = 3;
 
 const getBreakEvenPercent = (outcome: Outcome): number => 100 / MULTIPLIERS[outcome];
 
+const roundPercent = (value: number): number => Math.round(value * 100) / 100;
+
 const isX5Outcome = (outcome: Outcome): boolean => outcome.startsWith('x5_');
+const MAIN_OUTCOMES: Outcome[] = ['x10', 'x15'];
 const LARGE_OUTCOMES: Outcome[] = ['x10', 'x15', 'x25', 'x45'];
 
+const isMainOutcome = (outcome: Outcome): boolean => MAIN_OUTCOMES.includes(outcome);
 const isLargeOutcome = (outcome: Outcome): boolean => LARGE_OUTCOMES.includes(outcome);
 
 const isHotByRecentLargeOutcomes = (history: Outcome[], config: Config): boolean => {
   const windowSize = config.hotRegimeWindow || 15;
   const threshold = config.hotRegimeThreshold || 4;
   return history.slice(-windowSize).filter(isLargeOutcome).length >= threshold;
+};
+
+const countExactSlotSupport = (
+  history: Outcome[],
+  prediction: PredictionResult,
+  config: Config,
+  outcome: Outcome
+): number => {
+  const context = prediction.evidence.activeContext;
+  if (context.length === 0) {
+    return 0;
+  }
+
+  const activeHistory = history.slice(-config.historyWindow);
+  const contextLength = context.length;
+  return activeHistory.reduce((count, _item, index) => {
+    if (index > activeHistory.length - contextLength - 1) {
+      return count;
+    }
+
+    const isContextMatch = context.every((contextOutcome, offset) => activeHistory[index + offset] === contextOutcome);
+    return isContextMatch && activeHistory[index + contextLength] === outcome ? count + 1 : count;
+  }, 0);
+};
+
+const hasExactSlotSupport = (
+  history: Outcome[],
+  prediction: PredictionResult,
+  config: Config,
+  outcome: Outcome
+): boolean => !isX5Outcome(outcome) || countExactSlotSupport(history, prediction, config, outcome) >= config.minSupport;
+
+const getStakeProfile = (outcome: Outcome): Pick<BettingSignal, 'action' | 'stakeLevel' | 'risk'> => {
+  if (outcome === 'x25') {
+    return { action: 'probe', stakeLevel: 'probe', risk: 'high' };
+  }
+
+  if (outcome === 'x45') {
+    return { action: 'tiny-shot', stakeLevel: 'tiny-shot', risk: 'high' };
+  }
+
+  return { action: 'normal', stakeLevel: 'normal', risk: 'medium' };
+};
+
+const sortByEdge = (a: BettingCandidate, b: BettingCandidate): number => {
+  if (b.edge !== a.edge) {
+    return b.edge - a.edge;
+  }
+
+  return b.probability - a.probability;
 };
 
 const getMultiTargetCandidates = (
@@ -26,42 +83,36 @@ const getMultiTargetCandidates = (
   const candidates: BettingCandidate[] = ALL_OUTCOMES.map((outcome) => {
     const breakEven = getBreakEvenPercent(outcome);
     const probability = prediction.probabilities[outcome];
-    const requiredMultiple = isLargeOutcome(outcome) ? (isHot ? 2 : 3) : 1;
     return {
       outcome,
       probability,
       breakEven,
-      edge: Math.round((probability - breakEven * requiredMultiple) * 100) / 100,
+      edge: roundPercent(probability - breakEven),
     };
-  }).sort((a, b) => b.edge - a.edge);
+  }).sort(sortByEdge);
 
-  const largeSafety = safetyMargin;
-  const smallSafety = safetyMargin * 10;
+  const playableCandidates = candidates.filter((candidate) => (
+    candidate.probability >= candidate.breakEven + safetyMargin
+    && hasExactSlotSupport(history, prediction, config, candidate.outcome)
+  ));
 
-  const largeTargets = LARGE_OUTCOMES.filter((outcome) => {
-    const probability = prediction.probabilities[outcome];
-    const threshold = getBreakEvenPercent(outcome) * (isHot ? 2 : 3) + largeSafety;
-    return probability >= threshold;
-  });
+  const strongMainTargets = playableCandidates
+    .filter((candidate) => isMainOutcome(candidate.outcome) && candidate.edge >= STRONG_EDGE_MARGIN)
+    .sort(sortByEdge)
+    .map((candidate) => candidate.outcome);
 
-  const x5Targets = ALL_OUTCOMES
-    .filter(isX5Outcome)
-    .sort((a, b) => prediction.probabilities[b] - prediction.probabilities[a]);
-
-  const smallTargets = isHot
-    ? x5Targets.filter((outcome) => prediction.probabilities[outcome] > (30 + smallSafety))
-    : x5Targets.slice(0, 2);
+  const targets = strongMainTargets.length >= 2
+    ? strongMainTargets.slice(0, 2)
+    : playableCandidates.slice(0, 1).map((candidate) => candidate.outcome);
 
   return {
-    targets: [...largeTargets, ...smallTargets],
+    targets,
     candidates,
     reasons: [
-      isHot
-        ? 'Hot regime: bet large outcomes above 2x break-even.'
-        : 'Non-hot regime: bet large outcomes above 3x break-even.',
-      isHot
-        ? 'Hot regime: bet x5 slots only above 30%.'
-        : 'Non-hot regime: always bet top two x5 slots.',
+      'Outcomes must clear break-even plus safety margin.',
+      'x5 targets require exact-slot support.',
+      isHot ? 'Hot regime is active.' : 'Non-hot regime is active.',
+      'Default target limit is one target per spin.',
     ],
   };
 };
@@ -83,16 +134,17 @@ const calculateBettingSignalInternal = (
       risk: 'low',
       candidates,
       agreementScore: 0,
-      reasons: ['No outcome qualifies under the current regime rules.', ...reasons],
+      reasons: ['No outcome clears break-even plus the safety margin.', ...reasons],
     };
   }
 
+  const primaryTarget = targets[0];
+  const stakeProfile = getStakeProfile(primaryTarget);
+
   return {
-    action: 'normal',
-    target: targets[0],
+    ...stakeProfile,
+    target: primaryTarget,
     targets,
-    stakeLevel: 'normal',
-    risk: 'medium',
     candidates,
     agreementScore: targets.length,
     reasons: [
@@ -162,6 +214,46 @@ const evaluateRecentPerformance = (
 
   const isDriftDetected = activeBets >= 3 && (netReturn <= -2 || wins / activeBets < 0.15);
   return { netReturn, isDriftDetected };
+};
+
+const getCooldownRemaining = (
+  history: Outcome[],
+  config: Config,
+  safetyMargin: number
+): number => {
+  const evaluationConfig = { ...config, useAdaptiveSafety: false, useAutoModeSwitch: false };
+  let consecutiveLosses = 0;
+  let cooldownRemaining = 0;
+
+  for (let i = 1; i < history.length; i++) {
+    if (cooldownRemaining > 0) {
+      cooldownRemaining--;
+      continue;
+    }
+
+    const prefix = history.slice(0, i);
+    const actual = history[i];
+    const prediction = calculatePrediction(prefix, evaluationConfig);
+    const signal = calculateBettingSignalInternal(prefix, prediction, evaluationConfig, safetyMargin);
+    const targets = signal.targets ?? [];
+
+    if (signal.action === 'skip' || targets.length === 0) {
+      continue;
+    }
+
+    if (targets.includes(actual)) {
+      consecutiveLosses = 0;
+      continue;
+    }
+
+    consecutiveLosses++;
+    if (consecutiveLosses >= COOLDOWN_LOSS_TRIGGER) {
+      cooldownRemaining = COOLDOWN_SPINS;
+      consecutiveLosses = 0;
+    }
+  }
+
+  return cooldownRemaining;
 };
 
 const E_BASE = 7.7753; // Expected multiplier under base probabilities
@@ -257,19 +349,35 @@ export const calculateBettingSignal = (
     activeSafetyMargin = Math.max(0.01, Math.round((activeSafetyMargin + safetyShift) * 100) / 100);
   }
 
-  // 3. Drift Detection
+  // 3. Drift Detection and Cooldown
   let isDriftDetected = false;
-  if (config.useAdaptiveSafety && history.length >= 15) {
+  let isCooldownActive = false;
+  if (config.useAdaptiveSafety && history.length >= 3) {
     const evalConfig = { ...activeConfig, useAdaptiveSafety: false, useAutoModeSwitch: false };
-    const perf = evaluateRecentPerformance(history, evalConfig);
-    isDriftDetected = perf.isDriftDetected;
-    if (isDriftDetected) {
-      activeSafetyMargin = 2.0; // scale up safety margin to 2%
+    const perf = history.length >= 15
+      ? evaluateRecentPerformance(history, evalConfig)
+      : { netReturn: 0, isDriftDetected: false };
+    const cooldownRemaining = getCooldownRemaining(history, evalConfig, activeSafetyMargin);
+    isCooldownActive = cooldownRemaining > 0;
+    isDriftDetected = perf.isDriftDetected || isCooldownActive;
+    if (perf.isDriftDetected) {
+      activeSafetyMargin = 2.0;
     }
   }
 
   // 4. Compute final signal
-  const signal = calculateBettingSignalInternal(history, activePrediction, activeConfig, activeSafetyMargin);
+  const signal = isCooldownActive
+    ? {
+      action: 'skip' as const,
+      target: null,
+      targets: [],
+      stakeLevel: 'skip' as const,
+      risk: 'low' as const,
+      candidates: getMultiTargetCandidates(activePrediction, history, activeConfig, activeSafetyMargin).candidates,
+      agreementScore: 0,
+      reasons: ['Cooldown: skip after three consecutive losing betting spins.'],
+    }
+    : calculateBettingSignalInternal(history, activePrediction, activeConfig, activeSafetyMargin);
 
   // 5. Compute Kelly bets if enabled
   let recommendedBets: Record<Outcome, number> | undefined = undefined;

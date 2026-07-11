@@ -19,15 +19,15 @@ const predict = (history: Outcome[], config: Config = DEFAULT_CONFIG) =>
   calculatePrediction(history, config);
 
 describe('Betting Signal Engine', () => {
-  it('non-hot regime still recommends the two highest x5 slots when no large outcome qualifies', () => {
+  it('skips when no outcome clears break-even plus the safety margin', () => {
     const prediction = predict([]);
 
     const signal = calculateBettingSignal([], prediction, DEFAULT_CONFIG);
 
-    expect(signal.action).toBe('normal');
-    expect(signal.targets).toHaveLength(2);
-    expect(signal.targets?.every(target => target.startsWith('x5_'))).toBe(true);
-    expect(signal.reasons).toContain('Non-hot regime: always bet top two x5 slots.');
+    expect(signal.action).toBe('skip');
+    expect(signal.targets).toEqual([]);
+    expect(signal.stakeLevel).toBe('skip');
+    expect(signal.reasons).toContain('No outcome clears break-even plus the safety margin.');
   });
 
   it('keeps an outcome playable when it clears break-even plus safety margin', () => {
@@ -54,17 +54,17 @@ describe('Betting Signal Engine', () => {
     const x25History: Outcome[] = Array(12).fill(['x25', 'x10']).flat() as Outcome[];
     const x25Signal = calculateBettingSignal(x25History, predict(x25History), DEFAULT_CONFIG);
     expect(x25Signal.targets).toContain('x25');
-    expect(x25Signal.action).toBe('normal');
-    expect(x25Signal.stakeLevel).toBe('normal');
+    expect(x25Signal.action).toBe('probe');
+    expect(x25Signal.stakeLevel).toBe('probe');
 
     const x45History: Outcome[] = Array(12).fill(['x45', 'x10']).flat() as Outcome[];
     const x45Signal = calculateBettingSignal(x45History, predict(x45History), DEFAULT_CONFIG);
     expect(x45Signal.targets).toContain('x45');
-    expect(x45Signal.action).toBe('normal');
-    expect(x45Signal.stakeLevel).toBe('normal');
+    expect(x45Signal.action).toBe('tiny-shot');
+    expect(x45Signal.stakeLevel).toBe('tiny-shot');
   });
 
-  it('in non-hot regime recommends the top two x5 slots even when generic x5 outcomes are frequent', () => {
+  it('does not recommend generic x5 targets without exact-slot support', () => {
     const history: Outcome[] = [
       'x5_1', 'x5_2', 'x5_3', 'x5_4',
       'x5_2', 'x5_3', 'x5_4', 'x5_1',
@@ -74,9 +74,8 @@ describe('Betting Signal Engine', () => {
 
     const signal = calculateBettingSignal(history, predict(history), DEFAULT_CONFIG);
 
-    expect(signal.action).toBe('normal');
-    expect(signal.targets).toHaveLength(2);
-    expect(signal.targets?.every(target => target.startsWith('x5_'))).toBe(true);
+    expect(signal.targets?.some(target => target.startsWith('x5_'))).toBe(false);
+    expect(signal.reasons).toContain('x5 targets require exact-slot support.');
   });
 
   it('uses target count as agreement score for multi-target recommendations', () => {
@@ -108,19 +107,24 @@ describe('Betting Signal Engine', () => {
     expect(signal.targets?.some(target => target === 'x10' || target === 'x15')).toBe(true);
   });
 
-  it('allows x5 slots through regime rules instead of old exact-evidence gate', () => {
+  it('allows an x5 slot only when that exact slot has support and clears the edge gate', () => {
     const history: Outcome[] = [];
     for (let i = 0; i < 8; i++) {
       history.push('x10', 'x5_3');
     }
     history.push('x10');
 
-    const signal = calculateBettingSignal(history, predict(history), DEFAULT_CONFIG);
+    const signal = calculateBettingSignal(history, predict(history), {
+      ...DEFAULT_CONFIG,
+      priorStrength: 0,
+      minSupport: 5,
+    });
 
     expect(signal.action).toBe('normal');
     expect(signal.targets).toContain('x5_3');
+    expect(signal.targets).toHaveLength(1);
     expect(signal.stakeLevel).toBe('normal');
-    expect(signal.reasons).toContain('Hot regime: bet x5 slots only above 30%.');
+    expect(signal.reasons).toContain('x5 targets require exact-slot support.');
   });
 
   it('backtests recorded history using the same live recommendation engine', () => {
@@ -140,7 +144,7 @@ describe('Betting Signal Engine', () => {
     expect(typeof summary.estimatedReturn).toBe('number');
   });
 
-  it('in non-hot regime bets the top two x5 slots and large outcomes at three times break-even', () => {
+  it('in non-hot regime skips x5-heavy history when no exact slot clears the edge gate', () => {
     const history: Outcome[] = [
       'x5_1', 'x5_2', 'x5_1', 'x5_2', 'x5_1',
       'x5_2', 'x5_3', 'x5_4', 'x5_1', 'x5_2',
@@ -153,12 +157,12 @@ describe('Betting Signal Engine', () => {
       useRegimeAdjuster: false,
     });
 
-    expect(signal.targets).toHaveLength(2);
-    expect(signal.targets).toEqual(expect.arrayContaining(['x5_1', 'x5_2']));
-    expect(signal.reasons).toContain('Non-hot regime: always bet top two x5 slots.');
+    expect(signal.action).toBe('skip');
+    expect(signal.targets).toEqual([]);
+    expect(signal.reasons).toContain('x5 targets require exact-slot support.');
   });
 
-  it('in hot regime bets all large outcomes at two times break-even and only x5 slots above 30%', () => {
+  it('in hot regime recommends the strongest large target instead of every large outcome', () => {
     const history: Outcome[] = [
       'x10', 'x15', 'x10', 'x15', 'x10',
       'x15', 'x25', 'x45', 'x10', 'x15',
@@ -171,9 +175,10 @@ describe('Betting Signal Engine', () => {
       useRegimeAdjuster: false,
     });
 
-    expect(signal.targets).toContain('x15');
+    expect(signal.targets).toEqual(['x15']);
     expect(signal.targets).not.toContain('x5_1');
-    expect(signal.reasons).toContain('Hot regime: bet large outcomes above 2x break-even.');
+    expect(signal.stakeLevel).toBe('normal');
+    expect(signal.reasons).toContain('Outcomes must clear break-even plus safety margin.');
   });
 
   it('uses configurable hot regime window and threshold for multi-target rules', () => {
@@ -194,7 +199,7 @@ describe('Betting Signal Engine', () => {
       hotRegimeThreshold: 3,
     });
 
-    expect(signal.reasons).toContain('Hot regime: bet large outcomes above 2x break-even.');
+    expect(signal.reasons).toContain('Hot regime is active.');
   });
 
   it('backtest charges one stake per selected target in the same turn', () => {
@@ -216,13 +221,29 @@ describe('Betting Signal Engine', () => {
     expect(summary.estimatedReturn).toBeGreaterThanOrEqual(3);
   });
 
-  it('keeps adaptive safety at the default margin when multi-target rules do not detect drift', () => {
+
+
+  it('forces a three-spin cooldown after three consecutive losing betting spins', () => {
     const history: Outcome[] = [
-      ...Array(15).fill('x10'),
-      'x5_1', 'x5_2', 'x5_3', 'x5_4', 'x25', 'x45',
-      'x5_1', 'x5_2', 'x5_3', 'x5_4', 'x25', 'x45',
-      'x5_1', 'x5_2', 'x5_3'
+      'x10', 'x15', 'x10', 'x15', 'x10', 'x15',
+      'x10', 'x15', 'x10', 'x15', 'x10',
+      'x5_1', 'x5_2', 'x5_3',
     ];
+
+    const signal = calculateBettingSignal(history, predict(history), {
+      ...DEFAULT_CONFIG,
+      priorStrength: 0,
+      useAdaptiveSafety: true,
+    });
+
+    expect(signal.action).toBe('skip');
+    expect(signal.stakeLevel).toBe('skip');
+    expect(signal.isDriftDetected).toBe(true);
+    expect(signal.reasons).toContain('Cooldown: skip after three consecutive losing betting spins.');
+  });
+
+  it('keeps adaptive safety at the default margin when recent betting spins are not drifting', () => {
+    const history: Outcome[] = Array(12).fill(['x10', 'x15']).flat() as Outcome[];
 
     const config: Config = {
       ...DEFAULT_CONFIG,
@@ -241,7 +262,7 @@ describe('Betting Signal Engine', () => {
 
     const summary = calculateBacktest(history, DEFAULT_CONFIG);
 
-    expect(summary.currentWinStreak).toBe(21);
+    expect(summary.currentWinStreak).toBe(22);
     expect(summary.currentLossStreak).toBe(0);
   });
 
@@ -447,7 +468,7 @@ describe('Betting Signal Engine', () => {
         priorStrength: 0,
       };
       const result = calculateBacktest(history, config);
-      expect(result.maxConsecutiveWins).toBeGreaterThanOrEqual(5);
+      expect(result.maxConsecutiveWins).toBeGreaterThanOrEqual(3);
       expect(result.maxConsecutiveLosses).toBe(0);
     });
   });

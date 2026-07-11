@@ -79,3 +79,41 @@ The UI should avoid attaching detailed confidence explanations to every outcome 
 Prediction output may highlight the outcome with the highest current probability.
 
 The highlighted outcome should be described as the current highest-probability outcome, not as a guaranteed or certain next result.
+
+### Playable Outcome
+
+An outcome is playable only when its predicted probability exceeds its break-even probability by at least the configured safety margin.
+
+High probability alone does not make an outcome playable.
+
+### Skip Recommendation
+
+A skip recommendation means no outcome is currently playable.
+
+Skipping a spin is a normal betting signal state, not an error or missing prediction.
+
+### Exact-Slot Support
+
+Exact-slot support means evidence for one specific outcome, such as `x5_1`, rather than evidence for a collapsed multiplier group such as generic `x5`.
+
+The four `x5` outcomes require exact-slot support before they are playable.
+
+### Target Tier
+
+A target tier is the risk class assigned to a playable outcome. `x10` and `x15` are main targets, `x25` is a probe target, and `x45` is a tiny-shot target.
+
+### Target Limit
+
+The default recommendation should select at most one target per spin. A second target is only acceptable when both targets are `x10` or `x15` and both have strong edge.
+
+### Strong Edge
+
+Strong edge means a playable outcome exceeds its break-even probability by at least three percentage points.
+
+Strong edge is required before a second `x10` or `x15` target can be recommended on the same spin.
+
+### Cooldown
+
+Cooldown is a forced skip state after a losing streak of resolved betting spins. It counts only spins where the system recommended an actual bet, not prior skip recommendations.
+
+The default cooldown starts after three consecutive losing betting spins and lasts for the next three spins.
