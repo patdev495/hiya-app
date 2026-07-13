@@ -508,7 +508,7 @@ export default function App() {
               {/* Target Outcome Selector */}
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
-                  {t('statsSelectedOutcomeLabel')}
+                  {t('statsSelectedOutcomeLabel')} ({history.length} {language === 'vi' ? 'lượt' : 'spins'})
                 </label>
                 <div className="flex flex-wrap gap-1">
                   {ALL_OUTCOMES.map((o) => {
