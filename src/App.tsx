@@ -572,6 +572,152 @@ export default function App() {
               </div>
             </div>
 
+            {/* Detailed Occurrence Sequence List (UX Improvement) */}
+            {recentOccurrences.length > 0 && (
+              <div className="pt-4 border-t border-slate-800/60 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                    {language === 'vi' ? 'Chi tiết các chuỗi lượt quay gần nhất' : 'Detailed Sequence History'}
+                  </h3>
+                  <span className="text-[10px] text-slate-500 italic">
+                    {language === 'vi' ? 'Rê chuột để làm nổi bật đường trên biểu đồ' : 'Hover to highlight line on chart'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {/* Current reference sequence first */}
+                  {currentTrendLine && (() => {
+                    const isActive = activeLineIdx === 999;
+                    return (
+                      <div 
+                        onMouseEnter={() => setActiveLineIdx(999)}
+                        onMouseLeave={() => setActiveLineIdx(null)}
+                        className={`flex items-center justify-between p-2.5 rounded-lg border text-xs font-mono transition-all duration-200 cursor-pointer md:col-span-2 ${
+                          isActive
+                            ? 'bg-rose-500/10 border-rose-500/40 shadow-[0_0_12px_rgba(244,63,94,0.1)] scale-[1.01]'
+                            : 'bg-rose-950/10 border-rose-950/30 shadow-[0_0_12px_rgba(244,63,94,0.03)]'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[10px] font-black px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300`}>
+                            {language === 'vi' ? 'HIỆN TẠI' : 'ACTIVE'}
+                          </span>
+                          <span className="text-slate-500">Spin #{currentTrendLine.spinNumber}</span>
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          {currentTrendLine.points.map((pt, pIdx) => {
+                            if (pt.outcome) {
+                              const color = OUTCOME_COLORS[pt.outcome];
+                              const isCenter = pt.relPos === 0;
+                              return (
+                                <div key={pt.relPos} className="flex items-center gap-1">
+                                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${color.bg} ${color.text} border ${color.border} ${
+                                    isCenter ? 'ring-2 ring-rose-500/55 shadow-[0_0_8px_rgba(244,63,94,0.4)]' : ''
+                                  }`}>
+                                    {pt.outcome.toUpperCase()}
+                                  </span>
+                                  {pIdx < currentTrendLine.points.length - 1 && (
+                                    <span className="text-slate-600">→</span>
+                                  )}
+                                </div>
+                              );
+                            } else {
+                              return (
+                                <div key={pt.relPos} className="flex items-center gap-1">
+                                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-900 border border-slate-800 text-slate-600 animate-pulse">
+                                    {language === 'vi' ? 'Chờ...' : 'Waiting'}
+                                  </span>
+                                  {pIdx < currentTrendLine.points.length - 1 && (
+                                    <span className="text-slate-600">→</span>
+                                  )}
+                                </div>
+                              );
+                            }
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {[...trendLines].reverse().map((line, listIdx) => {
+                    const idx = line.lineIdx;
+                    const isLatestInPast = listIdx === 0;
+                    const isActive = activeLineIdx === idx;
+                    const strokeColor = LINE_PALETTE_COLORS[listIdx % LINE_PALETTE_COLORS.length];
+                    return (
+                      <div 
+                        key={line.occIndex} 
+                        onMouseEnter={() => setActiveLineIdx(idx)}
+                        onMouseLeave={() => setActiveLineIdx(null)}
+                        style={{
+                          borderColor: isActive ? strokeColor + '60' : undefined,
+                          boxShadow: isActive ? `0 0 12px ${strokeColor}20` : undefined,
+                          backgroundColor: isActive ? `${strokeColor}12` : undefined
+                        }}
+                        className={`flex items-center justify-between p-2.5 rounded-lg border text-xs font-mono transition-all duration-200 cursor-pointer ${
+                          isActive
+                            ? ''
+                            : isLatestInPast 
+                              ? 'bg-slate-950/60 border-slate-800' 
+                              : 'bg-slate-950/40 border-slate-800 hover:border-slate-700'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span 
+                            style={{
+                              backgroundColor: isActive ? strokeColor : strokeColor + '20',
+                              color: isActive ? '#fff' : strokeColor
+                            }}
+                            className="text-[10px] font-black px-1.5 py-0.5 rounded transition-colors duration-200"
+                          >
+                            #{listIdx + 1}
+                          </span>
+                          <span className="text-slate-500">Spin #{line.spinNumber}</span>
+                          {isLatestInPast && (
+                            <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">
+                              {language === 'vi' ? '(Gần nhất)' : '(Latest)'}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          {line.points.map((pt, pIdx) => {
+                            if (pt.outcome) {
+                              const color = OUTCOME_COLORS[pt.outcome];
+                              const isCenter = pt.relPos === 0;
+                              return (
+                                <div key={pt.relPos} className="flex items-center gap-1">
+                                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${color.bg} ${color.text} border ${color.border} ${
+                                    isCenter ? 'ring-2 ring-indigo-500/40' : ''
+                                  }`}>
+                                    {pt.outcome.toUpperCase()}
+                                  </span>
+                                  {pIdx < line.points.length - 1 && (
+                                    <span className="text-slate-600">→</span>
+                                  )}
+                                </div>
+                              );
+                            } else {
+                              return (
+                                <div key={pt.relPos} className="flex items-center gap-1">
+                                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-900 border border-slate-800 text-slate-600">
+                                    ---
+                                  </span>
+                                  {pIdx < line.points.length - 1 && (
+                                    <span className="text-slate-600">→</span>
+                                  )}
+                                </div>
+                              );
+                            }
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* SVG Chart Area */}
             <div className="relative bg-slate-950/60 border border-slate-800/80 rounded-xl p-4 min-h-[320px] flex flex-col justify-between">
               {recentOccurrences.length === 0 ? (
@@ -1172,152 +1318,6 @@ export default function App() {
                       )}
                     </div>
                   </div>
-                </div>
-              </div>
-            )}
-
-            {/* Detailed Occurrence Sequence List (UX Improvement) */}
-            {recentOccurrences.length > 0 && (
-              <div className="mt-6 pt-4 border-t border-slate-800/60 space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                    {language === 'vi' ? 'Chi tiết các chuỗi lượt quay gần nhất' : 'Detailed Sequence History'}
-                  </h3>
-                  <span className="text-[10px] text-slate-500 italic">
-                    {language === 'vi' ? 'Rê chuột để làm nổi bật đường trên biểu đồ' : 'Hover to highlight line on chart'}
-                  </span>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  {/* Current reference sequence first */}
-                  {currentTrendLine && (() => {
-                    const isActive = activeLineIdx === 999;
-                    return (
-                      <div 
-                        onMouseEnter={() => setActiveLineIdx(999)}
-                        onMouseLeave={() => setActiveLineIdx(null)}
-                        className={`flex items-center justify-between p-2.5 rounded-lg border text-xs font-mono transition-all duration-200 cursor-pointer md:col-span-2 ${
-                          isActive
-                            ? 'bg-rose-500/10 border-rose-500/40 shadow-[0_0_12px_rgba(244,63,94,0.1)] scale-[1.01]'
-                            : 'bg-rose-950/10 border-rose-950/30 shadow-[0_0_12px_rgba(244,63,94,0.03)]'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className={`text-[10px] font-black px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300`}>
-                            {language === 'vi' ? 'HIỆN TẠI' : 'ACTIVE'}
-                          </span>
-                          <span className="text-slate-500">Spin #{currentTrendLine.spinNumber}</span>
-                        </div>
-
-                        <div className="flex items-center gap-1.5">
-                          {currentTrendLine.points.map((pt, pIdx) => {
-                            if (pt.outcome) {
-                              const color = OUTCOME_COLORS[pt.outcome];
-                              const isCenter = pt.relPos === 0;
-                              return (
-                                <div key={pt.relPos} className="flex items-center gap-1">
-                                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${color.bg} ${color.text} border ${color.border} ${
-                                    isCenter ? 'ring-2 ring-rose-500/55 shadow-[0_0_8px_rgba(244,63,94,0.4)]' : ''
-                                  }`}>
-                                    {pt.outcome.toUpperCase()}
-                                  </span>
-                                  {pIdx < currentTrendLine.points.length - 1 && (
-                                    <span className="text-slate-600">→</span>
-                                  )}
-                                </div>
-                              );
-                            } else {
-                              return (
-                                <div key={pt.relPos} className="flex items-center gap-1">
-                                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-900 border border-slate-800 text-slate-600 animate-pulse">
-                                    {language === 'vi' ? 'Chờ...' : 'Waiting'}
-                                  </span>
-                                  {pIdx < currentTrendLine.points.length - 1 && (
-                                    <span className="text-slate-600">→</span>
-                                  )}
-                                </div>
-                              );
-                            }
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {[...trendLines].reverse().map((line, listIdx) => {
-                    const idx = line.lineIdx;
-                    const isLatestInPast = listIdx === 0;
-                    const isActive = activeLineIdx === idx;
-                    const strokeColor = LINE_PALETTE_COLORS[listIdx % LINE_PALETTE_COLORS.length];
-                    return (
-                      <div 
-                        key={line.occIndex} 
-                        onMouseEnter={() => setActiveLineIdx(idx)}
-                        onMouseLeave={() => setActiveLineIdx(null)}
-                        style={{
-                          borderColor: isActive ? strokeColor + '60' : undefined,
-                          boxShadow: isActive ? `0 0 12px ${strokeColor}20` : undefined,
-                          backgroundColor: isActive ? `${strokeColor}12` : undefined
-                        }}
-                        className={`flex items-center justify-between p-2.5 rounded-lg border text-xs font-mono transition-all duration-200 cursor-pointer ${
-                          isActive
-                            ? ''
-                            : isLatestInPast 
-                              ? 'bg-slate-950/60 border-slate-800' 
-                              : 'bg-slate-950/40 border-slate-800 hover:border-slate-700'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span 
-                            style={{
-                              backgroundColor: isActive ? strokeColor : strokeColor + '20',
-                              color: isActive ? '#fff' : strokeColor
-                            }}
-                            className="text-[10px] font-black px-1.5 py-0.5 rounded transition-colors duration-200"
-                          >
-                            #{listIdx + 1}
-                          </span>
-                          <span className="text-slate-500">Spin #{line.spinNumber}</span>
-                          {isLatestInPast && (
-                            <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">
-                              {language === 'vi' ? '(Gần nhất)' : '(Latest)'}
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="flex items-center gap-1.5">
-                          {line.points.map((pt, pIdx) => {
-                            if (pt.outcome) {
-                              const color = OUTCOME_COLORS[pt.outcome];
-                              const isCenter = pt.relPos === 0;
-                              return (
-                                <div key={pt.relPos} className="flex items-center gap-1">
-                                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${color.bg} ${color.text} border ${color.border} ${
-                                    isCenter ? 'ring-2 ring-indigo-500/40' : ''
-                                  }`}>
-                                    {pt.outcome.toUpperCase()}
-                                  </span>
-                                  {pIdx < line.points.length - 1 && (
-                                    <span className="text-slate-600">→</span>
-                                  )}
-                                </div>
-                              );
-                            } else {
-                              return (
-                                <div key={pt.relPos} className="flex items-center gap-1">
-                                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-900 border border-slate-800 text-slate-600">
-                                    ---
-                                  </span>
-                                  {pIdx < line.points.length - 1 && (
-                                    <span className="text-slate-600">→</span>
-                                  )}
-                                </div>
-                              );
-                            }
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
                 </div>
               </div>
             )}
