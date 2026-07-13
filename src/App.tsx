@@ -224,12 +224,14 @@ export default function App() {
   const lastOutcome = historyOutcomes[historyOutcomes.length - 1];
   const [selectedOutcome, setSelectedOutcome] = useState<Outcome | null>(null);
   
-  // Set default selectedOutcome when history changes
+  // Set selectedOutcome when lastOutcome changes (automatically track latest spin)
   useEffect(() => {
-    if (lastOutcome && !selectedOutcome) {
+    if (lastOutcome) {
       setSelectedOutcome(lastOutcome);
+    } else {
+      setSelectedOutcome(null);
     }
-  }, [lastOutcome, selectedOutcome]);
+  }, [lastOutcome]);
   const nRecent = config.statsNRecent || 5;
   const windowSize = config.statsWindowSize || 3;
 
@@ -612,7 +614,7 @@ export default function App() {
                               return (
                                 <div key={pt.relPos} className="flex items-center gap-1">
                                   <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${color.bg} ${color.text} border ${color.border} ${
-                                    isCenter ? 'ring-2 ring-rose-500/55 shadow-[0_0_8px_rgba(244,63,94,0.4)]' : ''
+                                    isCenter ? 'ring-2 ring-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]' : ''
                                   }`}>
                                     {pt.outcome.toUpperCase()}
                                   </span>
@@ -688,7 +690,7 @@ export default function App() {
                               return (
                                 <div key={pt.relPos} className="flex items-center gap-1">
                                   <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${color.bg} ${color.text} border ${color.border} ${
-                                    isCenter ? 'ring-2 ring-indigo-500/40' : ''
+                                    isCenter ? 'ring-2 ring-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]' : ''
                                   }`}>
                                     {pt.outcome.toUpperCase()}
                                   </span>
