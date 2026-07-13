@@ -514,17 +514,24 @@ export default function App() {
                   {ALL_OUTCOMES.map((o) => {
                     const isSelected = selectedOutcome === o;
                     const color = OUTCOME_COLORS[o];
+                    const hitCount = historyOutcomes.filter((x) => x === o).length;
+                    const pct = historyOutcomes.length > 0 ? Math.round((hitCount / historyOutcomes.length) * 100) + '%' : '0%';
+                    const reverseIdx = [...historyOutcomes].reverse().indexOf(o);
+                    const drySpinsText = reverseIdx === -1 ? '---' : `-${reverseIdx}`;
                     return (
                       <button
                         key={o}
                         onClick={() => setSelectedOutcome(o)}
-                        className={`px-2.5 py-1 text-xs font-mono font-bold rounded-md border transition-all cursor-pointer ${
+                        className={`flex flex-col items-center justify-center min-w-[62px] py-1 px-1.5 text-xs font-mono font-bold rounded-md border transition-all cursor-pointer ${
                           isSelected
                             ? `${color.bg} ${color.text} ${color.border} ring-2 ring-indigo-500/30`
                             : 'bg-slate-950/40 border-slate-800/80 text-slate-400 hover:text-slate-200 hover:border-slate-700'
                         }`}
                       >
-                        {o.toUpperCase()}
+                        <span className="text-[11px] font-black">{o.toUpperCase()}</span>
+                        <span className="text-[9px] font-normal opacity-75 mt-0.5">
+                          {pct} • {drySpinsText}
+                        </span>
                       </button>
                     );
                   })}
