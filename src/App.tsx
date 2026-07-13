@@ -14,6 +14,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { OUTCOME_COLORS } from './constants';
+import MobileTabBar, { type MobileTab } from './components/MobileTabBar';
 
 const LOCAL_STORAGE_HISTORY_KEY = 'wheel_prediction_history_v1';
 const LOCAL_STORAGE_CONFIG_KEY = 'wheel_prediction_config_v1';
@@ -68,6 +69,7 @@ export default function App() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingOutcome, setEditingOutcome] = useState<Outcome | ''>('');
   const [language, setLanguage] = useState<Language>('vi');
+  const [activeTab, setActiveTab] = useState<MobileTab>('record');
 
 
   useEffect(() => {
@@ -489,7 +491,7 @@ export default function App() {
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6">
 
           {/* LEFT: Trend Statistics Panel */}
-          <div className="bg-slate-900/60 backdrop-blur-xl border border-slate-800/80 rounded-2xl p-5 md:p-6 space-y-6">
+          <div className={`bg-slate-900/60 backdrop-blur-xl border border-slate-800/80 rounded-2xl p-5 md:p-6 space-y-6 ${activeTab === 'analyze' ? 'block' : 'hidden'} lg:block`}>
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-800/60">
               <div>
                 <h2 className="text-xl font-bold text-white flex items-center gap-2">
@@ -592,7 +594,7 @@ export default function App() {
                   <div className="w-full overflow-x-auto">
                     <svg
                       viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-                      className="w-full min-w-[600px] h-auto overflow-visible select-none"
+                      className="w-full min-w-0 h-auto overflow-visible select-none"
                     >
                       {/* Grid Horizontal Lines for Y-axis (Outcomes) */}
                       {ALL_OUTCOMES.map((o, idx) => {
@@ -948,7 +950,7 @@ export default function App() {
                 <div className="w-full overflow-x-auto">
                   <svg
                     viewBox={`0 0 ${chartWidth} 220`}
-                    className="w-full min-w-[600px] h-auto overflow-visible select-none"
+                    className="w-full min-w-0 h-auto overflow-visible select-none"
                   >
                     {/* Grid Horizontal Lines for Y-axis (Outcomes) */}
                     {ALL_OUTCOMES.map((o, idx) => {
@@ -1322,7 +1324,7 @@ export default function App() {
           </div>
 
           {/* RIGHT: Sidebar Panels (Input & History Log) */}
-          <div className="space-y-6">
+          <div className={`space-y-6 ${activeTab === 'record' ? 'block' : 'hidden'} lg:block`}>
             {/* Input Panel */}
             <div data-layout="record-outcome-panel" className="bg-slate-900/60 backdrop-blur-xl border border-slate-800/80 rounded-2xl p-5 relative">
               <h3 className="text-md font-bold text-white mb-1">{t('recordOutcome')}</h3>
@@ -1452,6 +1454,13 @@ export default function App() {
         hotRegimeWindow
         hotRegimeThreshold
       */}
+
+      {/* Mobile Bottom Tab Bar */}
+      <MobileTabBar
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        t={t}
+      />
     </div>
   );
 }
