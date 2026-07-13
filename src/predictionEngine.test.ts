@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calculateDeckWindowStats, calculatePrediction, getBaseProbabilities, ALL_OUTCOMES } from './predictionEngine';
+import { calculateDeckWindowStats, calculatePrediction, getBaseProbabilities, ALL_OUTCOMES, calculatePatternAccuracyStats } from './predictionEngine';
 import type { Config, Outcome } from './types';
 
 const DEFAULT_CONFIG: Config = {
@@ -383,4 +383,46 @@ describe('Prediction Engine', () => {
     expect(stats.outcomes.x10.countPercent).toBeCloseTo(50.00, 2);
     expect(stats.outcomes.x10.expectedPercent).toBeCloseTo(9.72, 2);
   });
+
+  describe('calculatePatternAccuracyStats', () => {
+    it('should return accuracy stats for all pattern families', () => {
+      const history: Outcome[] = ['x5_1', 'x5_2', 'x10', 'x5_1', 'x5_2', 'x10', 'x5_1', 'x5_2', 'x15', 'x5_3'];
+      const config: Config = {
+        ...DEFAULT_CONFIG,
+        predictionMode: 'pattern',
+        priorStrength: 5,
+        minSupport: 1
+      };
+      
+      const stats = calculatePatternAccuracyStats(history, config, 5);
+      
+      const expectedFamilies = [
+        'tier-transition',
+        'tier-gap',
+        'regime-gap',
+        'wheel-step',
+        'alternation',
+        'exact-gap',
+        'exact-direction'
+      ];
+      
+      for (const name of expectedFamilies) {
+        expect(stats).toHaveProperty(name);
+        expect(stats[name].attempts).toBeGreaterThanOrEqual(0);
+        expect(stats[name].hits).toBeGreaterThanOrEqual(0);
+        expect(stats[name].accuracy).toBeGreaterThanOrEqual(0);
+        expect(stats[name].accuracy).toBeLessThanOrEqual(100);
+      }
+    });
+
+    it('should return empty/zero stats if history length is less than 3', () => {
+      const stats = calculatePatternAccuracyStats(['x5_1', 'x5_2'], DEFAULT_CONFIG);
+      for (const key in stats) {
+        expect(stats[key].attempts).toBe(0);
+        expect(stats[key].hits).toBe(0);
+        expect(stats[key].accuracy).toBe(0);
+      }
+    });
+  });
 });
+

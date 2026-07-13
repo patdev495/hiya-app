@@ -25,6 +25,8 @@ export interface Config {
   rtpSensitivity?: number;
   useKellyCriterion?: boolean;
   kellyMultiplier?: number;
+  statsNRecent?: number;
+  statsWindowSize?: number;
 }
 
 export interface PredictionResult {

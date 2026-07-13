@@ -118,6 +118,8 @@ export default function SettingsModal({
               </div>
             </div>
 
+            {/* Hide legacy controls to keep UI clean for Single Statistics Mode */}
+            <div className="hidden">
             {/* Prediction Mode */}
             <div data-layout="settings-prediction-mode">
               <div className="flex items-center justify-between mb-2">
@@ -698,6 +700,7 @@ export default function SettingsModal({
                 </div>
               )}
             </div>
+            </div> {/* End of hidden legacy settings */}
 
           </div>
         </div>

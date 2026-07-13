@@ -667,3 +667,60 @@ export const calculatePrediction = (
     regimeThreshold
   };
 };
+
+export const calculatePatternAccuracyStats = (
+  history: Outcome[],
+  config: Config,
+  windowSize: number = 10
+): Record<string, { hits: number; attempts: number; accuracy: number }> => {
+  const stats: Record<string, { hits: number; attempts: number; accuracy: number }> = {};
+  
+  const familyNames = [
+    'tier-transition',
+    'tier-gap',
+    'regime-gap',
+    'wheel-step',
+    'alternation',
+    'exact-gap',
+    'exact-direction'
+  ];
+  
+  for (const name of familyNames) {
+    stats[name] = { hits: 0, attempts: 0, accuracy: 0 };
+  }
+  
+  if (history.length < 3) {
+    return stats;
+  }
+  
+  const startIdx = Math.max(2, history.length - windowSize);
+  const endIdx = history.length;
+  
+  for (let i = startIdx; i < endIdx; i++) {
+    const subHistory = history.slice(0, i);
+    const actualOutcome = history[i];
+    
+    const pred = calculatePrediction(subHistory, { ...config, predictionMode: 'pattern' });
+    const families = pred.evidence.patternFamilies ?? [];
+    
+    for (const fam of families) {
+      if (fam.matches > 0 && fam.topOutcome) {
+        if (!stats[fam.name]) {
+          stats[fam.name] = { hits: 0, attempts: 0, accuracy: 0 };
+        }
+        stats[fam.name].attempts++;
+        if (fam.topOutcome === actualOutcome) {
+          stats[fam.name].hits++;
+        }
+      }
+    }
+  }
+  
+  for (const name of familyNames) {
+    const s = stats[name];
+    s.accuracy = s.attempts > 0 ? Math.round((s.hits / s.attempts) * 10000) / 100 : 0;
+  }
+  
+  return stats;
+};
+
